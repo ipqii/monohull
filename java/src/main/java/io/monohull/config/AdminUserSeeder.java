@@ -10,16 +10,21 @@ import org.springframework.stereotype.Component;
 import io.monohull.entity.AppUserEntity;
 import io.monohull.repository.AppUserRepository;
 
+import java.util.Set;
+
 /**
  * Seeds the initial admin login on first boot (when {@code app_user} is empty),
  * using {@code MONOHULL_ADMIN_USERNAME} / {@code MONOHULL_ADMIN_PASSWORD}. If no password
- * is configured a weak default is used and a loud warning is logged.
+ * is configured a weak default is used and a loud warning is logged; seeding a
+ * well-known password (e.g. the dev compose's 'admin' fallback) also warns.
  */
 @Component
 public class AdminUserSeeder implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AdminUserSeeder.class);
     private static final String DEFAULT_PASSWORD = "changeme";
+    private static final Set<String> WELL_KNOWN_PASSWORDS =
+            Set.of("admin", "changeme", "password", "monohull");
 
     private final AppUserRepository users;
     private final PasswordEncoder passwordEncoder;
@@ -49,6 +54,14 @@ public class AdminUserSeeder implements ApplicationRunner {
             log.warn("MONOHULL_ADMIN_PASSWORD is not set. Seeding admin user '{}' with the",
                     adminUsername);
             log.warn("default password '{}'. CHANGE THIS IMMEDIATELY.", DEFAULT_PASSWORD);
+            log.warn("=================================================================");
+        } else if (WELL_KNOWN_PASSWORDS.contains(password)) {
+            log.warn("=================================================================");
+            log.warn("Seeding admin user '{}' with the well-known password '{}'.",
+                    adminUsername, password);
+            log.warn("The dev docker-compose.yml falls back to 'admin' when");
+            log.warn("MONOHULL_ADMIN_PASSWORD is unset. Fine for a throwaway dev");
+            log.warn("instance — change it for anything reachable by others.");
             log.warn("=================================================================");
         }
 

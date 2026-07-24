@@ -178,7 +178,7 @@ variables. The most commonly set variables:
 | `APP_DOCKER_HOST` | `unix:///var/run/docker.sock` | How Monohull reaches the Docker daemon it manages. |
 | `APP_DOCKER_HOST_HOME` | — | Home directory on the Docker host, used to resolve host-side paths for bind mounts. |
 | `MONOHULL_ADMIN_USERNAME` | `admin` | Initial admin login, seeded on first boot when no users exist. |
-| `MONOHULL_ADMIN_PASSWORD` | — | Initial admin password. **Set this** — an empty password disables the seeded login. |
+| `MONOHULL_ADMIN_PASSWORD` | — | Initial admin password. **Set this** — if unset, the account is seeded with the default password `changeme` and a loud warning in the log. |
 | `MONOHULL_MAXIMO_DOMAIN` | *(empty)* | Base domain for per-environment public Maximo URLs (e.g. `maximo.example.com`). Empty ⇒ LAN-only, no public routing. |
 | `MONOHULL_PUBLIC_BASE_URL` | *(empty)* | Public URL Monohull itself is reachable at (e.g. `https://monohull.example.com`), used to render the PR-build webhook URL. |
 | `MONOHULL_NETWORK_SUBNET_POOL` | `10.100.0.0/16` | `/16` block Monohull carves per-environment `/24` networks from. Must not overlap the host LAN or other cluster networks. |

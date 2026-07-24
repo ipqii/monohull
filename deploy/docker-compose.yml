@@ -35,7 +35,8 @@ services:
       SPRING_DATASOURCE_USERNAME: made
       SPRING_DATASOURCE_PASSWORD: ${MONOHULL_DB_PASSWORD:-made}
       # Seeded admin login (first boot only, while the user table is empty). Set a real
-      # password — an empty one disables the seeded account entirely.
+      # password — if the app boots without one it seeds the default 'changeme'
+      # (with a loud log warning), which is why compose refuses to start below.
       MONOHULL_ADMIN_USERNAME: ${MONOHULL_ADMIN_USERNAME:-admin}
       MONOHULL_ADMIN_PASSWORD: ${MONOHULL_ADMIN_PASSWORD:?set MONOHULL_ADMIN_PASSWORD}
       # Linux/macOS: mount the socket below and leave this as-is.
