@@ -52,13 +52,29 @@ when an environment is deleted.
 
 No clone needed — the prebuilt image is on GHCR (`ghcr.io/ipqii/monohull`, amd64 + arm64):
 
+**Linux / macOS (bash):**
+
 ```bash
 curl -O https://raw.githubusercontent.com/ipqii/monohull/main/deploy/docker-compose.yml
 MONOHULL_ADMIN_PASSWORD='choose-something' docker compose up -d
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+curl.exe -O https://raw.githubusercontent.com/ipqii/monohull/main/deploy/docker-compose.yml
+$env:MONOHULL_ADMIN_PASSWORD = 'choose-something'
+docker compose up -d
+```
+
+> The `VAR=value command` prefix on the bash line is bash-only syntax. In PowerShell the
+> variable must be set with `$env:` as above — rewriting the bash line as
+> `MONOHULL_ADMIN_PASSWORD='...'; docker compose up -d` leaves the variable unset and
+> docker compose will never see it.
+
 (Working from a clone instead? `docker compose up -d --build` in the repo root builds
-from source with the same layout.)
+from source with the same layout. Careful: that dev-oriented compose file falls back to
+`admin`/`admin` when `MONOHULL_ADMIN_PASSWORD` isn't set, rather than refusing to start.)
 
 Open `http://localhost:8806` and log in as `admin`. First steps in the UI:
 
