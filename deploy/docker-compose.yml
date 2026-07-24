@@ -1,0 +1,53 @@
+# Canonical Monohull deployment: the prebuilt image + MariaDB, working out of the box.
+#
+#   curl -O https://raw.githubusercontent.com/ipqii/monohull/main/deploy/docker-compose.yml
+#   MONOHULL_ADMIN_PASSWORD='choose-something' docker compose up -d
+#
+# Then open http://<host>:8806 and log in as admin. See docs/INSTALL.md for the full
+# reference (public routing, static ports, API key, Windows npipe notes).
+
+services:
+
+  monohull-db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MONOHULL_DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: made        # internal schema name is historical — keep as-is
+      MYSQL_USER: made
+      MYSQL_PASSWORD: ${MONOHULL_DB_PASSWORD:-made}
+    volumes:
+      - monohull-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  monohull-app:
+    image: ghcr.io/ipqii/monohull:1
+    restart: unless-stopped
+    ports:
+      - "${MONOHULL_HTTP_PORT:-8806}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://monohull-db:3306/made
+      SPRING_DATASOURCE_USERNAME: made
+      SPRING_DATASOURCE_PASSWORD: ${MONOHULL_DB_PASSWORD:-made}
+      # Seeded admin login (first boot only, while the user table is empty). Set a real
+      # password — an empty one disables the seeded account entirely.
+      MONOHULL_ADMIN_USERNAME: ${MONOHULL_ADMIN_USERNAME:-admin}
+      MONOHULL_ADMIN_PASSWORD: ${MONOHULL_ADMIN_PASSWORD:?set MONOHULL_ADMIN_PASSWORD}
+      # Linux/macOS: mount the socket below and leave this as-is.
+      # Windows (Docker Desktop): remove the socket volume and set
+      #   APP_DOCKER_HOST: npipe:////./pipe/docker_engine
+      APP_DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      # Monohull manages Maximo environments by talking to the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      monohull-db:
+        condition: service_healthy
+
+volumes:
+  monohull-db-data:

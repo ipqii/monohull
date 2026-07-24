@@ -1,0 +1,1 @@
+ALTER TABLE custom_action ADD COLUMN execution_type VARCHAR(20) NOT NULL DEFAULT 'EXEC';

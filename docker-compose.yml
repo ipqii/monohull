@@ -1,0 +1,68 @@
+services:
+
+  monohull-db:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: made
+      MYSQL_USER: made
+      MYSQL_PASSWORD: made
+    volumes:
+      - monohull-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  monohull-app:
+    build: .
+    ports:
+      # Override when 8806 is taken on your host: MONOHULL_HTTP_PORT=18806 docker compose up
+      - "${MONOHULL_HTTP_PORT:-8806}:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://monohull-db:3306/made
+      SPRING_DATASOURCE_USERNAME: made
+      SPRING_DATASOURCE_PASSWORD: made
+      # Seeded admin login (first boot only, while the user table is empty).
+      # Change the password for anything beyond local evaluation. The e2e suite
+      # logs in with these same values.
+      MONOHULL_ADMIN_USERNAME: ${MONOHULL_ADMIN_USERNAME:-admin}
+      MONOHULL_ADMIN_PASSWORD: ${MONOHULL_ADMIN_PASSWORD:-admin}
+      # Linux/macOS: mount the socket below and leave this as-is.
+      # Windows (Docker Desktop): remove the socket volume and set this to:
+      #   APP_DOCKER_HOST: npipe:////./pipe/docker_engine
+      APP_DOCKER_HOST: unix:///var/run/docker.sock
+    volumes:
+      # Gives the app access to the host Docker daemon so it can manage Maximo containers.
+      # Remove this entry on Windows and use the npipe override above instead.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # NOTE: when creating Maximo environments, set hostVolumePath to a real HOST path
+      # (not a path inside this container). The managed containers are created on the
+      # host Docker daemon and their bind mounts must resolve on the host filesystem.
+    depends_on:
+      monohull-db:
+        condition: service_healthy
+
+  # Playwright e2e tests. Activated via the "test" profile so it doesn't run on
+  # `docker compose up`. Use:
+  #   docker compose --profile test run --rm e2e
+  # or set extra Playwright args:
+  #   docker compose --profile test run --rm e2e npx playwright test tests/dashboard.spec.ts
+  e2e:
+    profiles: ["test"]
+    build: ./e2e
+    depends_on:
+      - monohull-app
+    environment:
+      BASE_URL: http://monohull-app:8080
+      E2E_USERNAME: ${MONOHULL_ADMIN_USERNAME:-admin}
+      E2E_PASSWORD: ${MONOHULL_ADMIN_PASSWORD:-admin}
+    volumes:
+      # Surface the HTML report and traces back to the host for inspection.
+      - ./e2e/playwright-report:/e2e/playwright-report
+      - ./e2e/test-results:/e2e/test-results
+
+volumes:
+  monohull-db-data:

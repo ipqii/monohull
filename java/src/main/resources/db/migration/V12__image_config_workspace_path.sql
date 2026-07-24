@@ -1,0 +1,1 @@
+ALTER TABLE image_config ADD COLUMN workspace_path VARCHAR(500) DEFAULT NULL;

@@ -1,0 +1,1 @@
+ALTER TABLE custom_action ADD COLUMN run_as_user VARCHAR(64) DEFAULT NULL;

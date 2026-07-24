@@ -1,0 +1,15 @@
+{
+  "name": "mock-receiver",
+  "version": "1.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "HTTP mock for Maximo outbound integration channels in SIT.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "js-yaml": "^4.1.0"
+  }
+}

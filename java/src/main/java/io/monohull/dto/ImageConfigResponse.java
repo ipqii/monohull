@@ -1,0 +1,39 @@
+package io.monohull.dto;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record ImageConfigResponse(
+    Long id,
+    String client,
+    String project,
+    String maximoVersion,
+    String appImage,
+    String dbImage,
+    String admImage,
+    String dbVendor,
+    String dbName,
+    Integer dbContainerPort,
+    String hostVolumePath,
+    String dbVolumeName,
+    String workspacePath,
+    Integer appHttpPort,
+    Integer appHttpsPort,
+    Integer dbPort,
+    Integer mockHostPort,
+    Integer smtpHostPort,
+    Integer smtpUiHostPort,
+    Long pipelineId,
+    String pipelineName,
+    String launchDescription,
+    boolean launchStaticPorts,
+    boolean launchIncludeMock,
+    boolean launchIncludeSmtp,
+    LocalDateTime createdAt,
+    List<ExtraEnvVar> dbExtraEnv,
+    List<ExtraBind> dbExtraBinds,
+    List<ExtraEnvVar> appExtraEnv,
+    List<ExtraBind> appExtraBinds,
+    List<ExtraEnvVar> admExtraEnv,
+    List<ExtraBind> admExtraBinds
+) {}

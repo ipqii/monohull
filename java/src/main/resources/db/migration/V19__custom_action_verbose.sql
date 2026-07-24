@@ -1,0 +1,1 @@
+ALTER TABLE custom_action ADD COLUMN verbose TINYINT(1) NOT NULL DEFAULT 0;

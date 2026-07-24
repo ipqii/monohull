@@ -1,0 +1,50 @@
+# Mock receiver response rules.
+#
+# Rules are evaluated top-to-bottom against each inbound request; the FIRST rule
+# whose `match` predicates all hold wins and produces the response. With no match
+# the receiver replies 200 OK. Edit here and commit, or edit live in the /__mock UI
+# and export back into this file.
+#
+# match predicates (all present ones must hold):
+#   method          HTTP method, e.g. POST (optional; defaults to any)
+#   pathRegex       regex the request path must match (case-insensitive)
+#   bodyContains    substring the body must contain
+#   bodyRegex       regex the body must match; capture groups feed {{1}}..{{n}}
+#   bodyNotRegex    regex the body must NOT match
+#   headerContains  map of header-name -> substring the header value must contain
+#
+# respond:
+#   status          HTTP status code (default 200)
+#   contentType     Content-Type header shortcut
+#   headers         map of extra response headers
+#   body            response body template; supports {{1}}..{{n}} capture refs and
+#                   the named helpers {{billBatch}}, {{path}}, {{now}}
+
+rules:
+  # Preserves the receiver's original hardcoded behavior: a work order payload that
+  # carries no non-empty <PLUSPCUSTOMER> is rejected with 400 (still buffered).
+  - name: reject-wo-without-customer
+    match:
+      bodyContains: "<WORKORDER"
+      # Fire when there is no PLUSPCUSTOMER element with actual character content.
+      # Use [^<\s] (not \S) for the first content char so an empty element like
+      # <PLUSPCUSTOMER></PLUSPCUSTOMER> doesn't count the following "<" as content.
+      bodyNotRegex: "<PLUSPCUSTOMER[^>]*>\\s*[^<\\s]"
+    respond:
+      status: 400
+      contentType: text/plain
+      body: "work order message missing PLUSPCUSTOMER"
+
+  # Example end-to-end ack: echo the captured BILLBATCHNUM back into an XML response
+  # so the sending integration can verify the round trip.
+  - name: ack-bill-batch
+    match:
+      method: POST
+      bodyRegex: "<BILLBATCHNUM[^>]*>\\s*(\\d+)"
+    respond:
+      status: 200
+      contentType: application/xml
+      headers:
+        X-Mock-Rule: ack-bill-batch
+      body: |
+        <ack batch="{{1}}" receivedAt="{{now}}">received</ack>

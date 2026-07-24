@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mock Receiver</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Mock Receiver</h1>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="messages">Messages</button>
+      <button class="tab" data-tab="rules">Rules</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Messages tab -->
+    <section id="tab-messages" class="tab-panel active">
+      <div class="toolbar">
+        <label class="auto"><input type="checkbox" id="auto-refresh" checked /> Auto-refresh</label>
+        <button id="refresh-btn" class="btn">Refresh</button>
+        <button id="clear-btn" class="btn danger">Clear buffer</button>
+        <span id="msg-count" class="count"></span>
+      </div>
+      <div id="messages" class="messages"></div>
+      <div id="messages-empty" class="empty">No messages received yet.</div>
+    </section>
+
+    <!-- Rules tab -->
+    <section id="tab-rules" class="tab-panel">
+      <div class="toolbar">
+        <button id="rules-save" class="btn primary">Save</button>
+        <button id="rules-export" class="btn">Export</button>
+        <button id="rules-import" class="btn">Import</button>
+        <button id="rules-add" class="btn">Add rule</button>
+        <input type="file" id="rules-file" accept=".yaml,.yml,.txt" hidden />
+        <span id="rules-status" class="count"></span>
+      </div>
+      <div id="rules-error" class="error" hidden></div>
+      <div class="rules-layout">
+        <div id="rules-summary" class="rules-summary"></div>
+        <textarea id="rules-editor" spellcheck="false" placeholder="# rules YAML"></textarea>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

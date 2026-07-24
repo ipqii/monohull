@@ -1,0 +1,4 @@
+ALTER TABLE custom_action ADD COLUMN after_action VARCHAR(100) DEFAULT NULL;
+ALTER TABLE custom_action ADD COLUMN auto_run BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE action_execution ADD COLUMN pipeline_run_id VARCHAR(255) DEFAULT NULL;
+ALTER TABLE action_execution ADD COLUMN sequence_order INT DEFAULT NULL;

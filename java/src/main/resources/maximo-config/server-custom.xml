@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<server description="Maximo JMS — embedded Liberty messaging engine (replaces commented wmqJms block)">
+
+	<!--
+	  Embedded SIBus / Liberty messaging engine. Keeps the same JNDI names
+	  as the previous wmqJms config so MAXQUEUE rows already pointing at
+	  jms/maximo/int/cf/intcf and jms/maximo/int/queues/* still resolve.
+	  No external IBM MQ broker required.
+	-->
+
+	<messagingEngine>
+		<queue id="sqout" maxQueueDepth="100000"/>
+		<queue id="sqin" maxQueueDepth="100000"/>
+		<queue id="cqin" maxQueueDepth="100000"/>
+		<queue id="cqinerr" maxQueueDepth="100000"/>
+	</messagingEngine>
+
+	<jmsQueueConnectionFactory jndiName="jms/maximo/int/cf/intcf" connectionManagerRef="MIFJMS">
+		<properties.wasJms/>
+	</jmsQueueConnectionFactory>
+	<connectionManager id="MIFJMS" maxPoolSize="20"/>
+
+	<jmsQueue jndiName="jms/maximo/int/queues/sqout">
+		<properties.wasJms queueName="sqout"/>
+	</jmsQueue>
+	<jmsQueue jndiName="jms/maximo/int/queues/sqin">
+		<properties.wasJms queueName="sqin"/>
+	</jmsQueue>
+	<jmsQueue jndiName="jms/maximo/int/queues/cqin">
+		<properties.wasJms queueName="cqin"/>
+	</jmsQueue>
+	<jmsQueue jndiName="jms/maximo/int/queues/cqinerr">
+		<properties.wasJms queueName="cqinerr"/>
+	</jmsQueue>
+
+</server>

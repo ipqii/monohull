@@ -1,0 +1,349 @@
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        same-site: lax
+        http-only: true
+
+spring:
+  datasource:
+    url: jdbc:mariadb://localhost:3306/made
+    username: made
+    password: made
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  docker:
+    host: unix:///var/run/docker.sock
+    tlsVerify: false
+
+monohull:
+  network:
+    # /16 block from which each env network is given an explicit /24. Avoids Docker's
+    # exhausted default address pools on busy hosts. Must not overlap the host LAN or
+    # any cluster/overlay networks on the host. Override via MONOHULL_NETWORK_SUBNET_POOL.
+    subnet-pool: ${MONOHULL_NETWORK_SUBNET_POOL:10.100.0.0/16}
+  public:
+    # Base domain for per-environment Maximo URLs (e.g. "maximo.example.com").
+    # When set, each env's APP container is labelled for the host Traefik and
+    # published at https://<env-networkName>.<domain>/maximo. Empty => LAN-only.
+    maximo-domain: ${MONOHULL_MAXIMO_DOMAIN:}
+    # Public base URL Monohull itself is reachable at (e.g. "https://monohull.example.com"),
+    # used to render the webhook URL that git providers should POST PR events to.
+    # Empty => the UI prefixes the webhook path with its own origin.
+    base-url: ${MONOHULL_PUBLIC_BASE_URL:}
+  pr-builds:
+    # Max concurrent PR builds across all connected repos; excess builds queue.
+    max-concurrent: ${MONOHULL_PR_BUILDS_MAX_CONCURRENT:2}
+    # Root for per-PR git checkouts. Must be on a host-mounted volume so the same
+    # path resolves for bind mounts into build containers.
+    workspace-root: ${MONOHULL_PR_BUILDS_WORKSPACE_ROOT:/docker/volumefs/pr-builds}
+  admin:
+    # Initial login seeded on first boot when the app_user table is empty.
+    # Override via MONOHULL_ADMIN_USERNAME / MONOHULL_ADMIN_PASSWORD env vars.
+    username: ${MONOHULL_ADMIN_USERNAME:admin}
+    password: ${MONOHULL_ADMIN_PASSWORD:}
+  # Static bearer key for service-to-service read access (e.g. an external dashboard).
+  # Empty disables API-key auth. Set via MONOHULL_API_KEY.
+  api:
+    key: ${MONOHULL_API_KEY:}
+  mock:
+    image: monohull/mock-receiver:latest
+    build-path: docker/mock-receiver
+  smtp:
+    image: axllent/mailpit:latest
+  builder:
+    # Ephemeral package-builder (ant + JDK 8) for BUILDER-type actions. Built on
+    # demand from the context dir shipped inside the Monohull image, like the mock.
+    image: monohull/maximo-builder:latest
+    build-path: docker/maximo-builder
+  actions:
+    - id: run-updatedb-preprocessor
+      name: Run UpdateDB Pre-Processor
+      description: Run Maximo UpdateDB Pre-Processor
+      targetRole: ADM
+      command: /opt/IBM/SMP/maximo/tools/maximo/updatedblitepreprocessor.sh
+      workingDir: /opt/IBM/SMP/maximo/tools/maximo
+      timeout: 1800
+      autoRun: true
+    # Vanilla maximo-all.xml wipes deployment/maximo-all/ as its first step,
+    # which fails when that path is a bind mount. We redirect ant's output to
+    # /tmp and tar it into the bind-mounted Liberty config dir afterwards;
+    # APP picks the bundle up at /config via the shared mount. Also verifies
+    # maximo-all.ear was actually produced, since the shell wrapper swallows
+    # ant's non-zero exit codes.
+    - id: build-ear
+      name: Build EAR
+      description: Build the Maximo EAR and Liberty bundle, then publish it to the bind-mounted config dir.
+      targetRole: ADM
+      command: |
+        set -eo pipefail
+        trap 'rc=$?; echo "[build-ear] FAILED at line $LINENO with exit $rc"' ERR
+        rm -rf /tmp/mab
+        mkdir -p /tmp/mab
+        # MaximoBuildEarTask -nmaximo-all puts the bundle under <deploydeploymentdir>/maximo-all-server/.
+        ./maximo-all.sh -Dmaximo.deploydeploymentdir=/tmp/mab
+        SRC=/tmp/mab/maximo-all-server
+        test -s "$SRC/apps/maximo-all.ear" || { echo "[error] EAR not produced; ant build failed silently"; exit 1; }
+        DEST=/opt/IBM/SMP/maximo/deployment/was-liberty-default/deployment/maximo-all/maximo-all-server
+        mkdir -p "$DEST"
+        # Wipe contents but keep the dir itself (it's a bind mount point).
+        find "$DEST" -mindepth 1 -delete
+        # Copy contents via tar with --strip-components=1 so the archive never
+        # contains a '.' record. Docker Desktop's 9p bind mount on Windows
+        # rejects utime/chmod on the mount root, which made plain cp -a and
+        # 'tar -cf - .' fail even after the data copied successfully.
+        ( cd /tmp/mab && tar -cf - maximo-all-server ) | ( cd "$DEST" && tar --strip-components=1 --no-same-owner --no-same-permissions -xf - )
+        test -s "$DEST/apps/maximo-all.ear" || { echo "[error] EAR did not land at $DEST/apps/maximo-all.ear"; exit 1; }
+        echo "[build-ear] Liberty bundle deployed to $DEST"
+      workingDir: /opt/IBM/SMP/maximo/deployment/was-liberty-default
+      timeout: 600
+      afterAction: run-updatedb-preprocessor
+      autoRun: true
+      # Stream the full output into the live build log. An earlier config suppressed it
+      # (verbose: true), but that flag never took effect until the seeding prefix was
+      # fixed — and a silent multi-minute step reads as a frozen log.
+      verbose: false
+    - id: run-updatedb
+      name: Run Maximo UpdateDB
+      description: Run Maximo UpdateDB
+      targetRole: ADM
+      command: /opt/IBM/SMP/maximo/tools/maximo/updatedblite.sh
+      workingDir: /opt/IBM/SMP/maximo/tools/maximo
+      # First-time UpdateDB on a Maximo with industry solutions (PluS, Service Provider, etc.)
+      # can easily run 30-60+ minutes. 2 hours leaves headroom without being so long that a
+      # truly hung process goes unnoticed.
+      timeout: 7200
+      afterAction: build-ear
+      autoRun: true
+      # See build-ear: stream live rather than suppressing the longest step's output.
+      verbose: false
+    # Sanitizes PLUSCWODSPOINT.ANYWHEREREFID userdefined flag in maxattribute
+    # and maxattributecfg before updatedb runs — the vanilla Service Provider
+    # DB backup ships these flagged userdefined=1, which makes updatedb try to
+    # migrate them as customer-added attributes and fail.
+    - id: mas-fix-pre-updatedb
+      name: MAS pre-updatedb DB fixes
+      description: Clear stale userdefined flags that would break updatedb on the vanilla Service Provider DB.
+      targetRole: DB
+      command: |
+        set -eo pipefail
+        su - db2inst1 -c "db2 -t -v <<'SQL'
+        CONNECT TO maximo USER maximo USING maximo;
+        UPDATE maxattribute    SET userdefined=0 WHERE objectname='PLUSCWODSPOINT' AND attributename='ANYWHEREREFID';
+        UPDATE maxattributecfg SET userdefined=0 WHERE objectname='PLUSCWODSPOINT' AND attributename='ANYWHEREREFID';
+        COMMIT;
+        TERMINATE;
+        SQL"
+      timeout: 60
+      afterAction: build-ear
+      autoRun: true
+    # After updatedb, applies the SQL fixes that make the restored Service
+    # Provider DB usable by the dataload + APP container:
+    #   - mxe.int.enableosauth=0 — disables Maximo's app-server-side auth for
+    #     IF/OSLC. Without this, Liberty enforces the /oslc/* security
+    #     constraint (role 'maximouser' unbound) and rejects every OSLC call
+    #     at the gate before Maximo can run its own MAXUSER check.
+    #   - mxe.skipadminuser=1 — lets internal jobs skip the admin-user gate.
+    #   - applicationauth wipe + repopulate — the restored Service Provider
+    #     DB ships with a stale, partial MAXADMIN grant set (e.g. MXAPI*
+    #     objects missing SAVE), which causes dataload POSTs to return
+    #     BMXAA0024E "The action SAVE is not allowed on object …". We delete
+    #     every MAXADMIN row and re-grant the full cross-product of
+    #     MAXAPPS × SIGOPTION (excluding NOPORTLET, which is a presentation
+    #     marker and not a real privilege). Idempotent — re-running this
+    #     action produces the same final row set.
+    # The maxadmin password reset has moved out to set-maxadmin-password,
+    # which runs on ADM so it can call Maximo's own MXCipher to produce a
+    # hash this Maximo build will actually accept.
+    - id: mas-fix-post-updatedb
+      name: MAS post-updatedb DB fixes
+      description: Apply post-updatedb SQL fixes so the restored DB accepts MAXADMIN auth and OSLC calls.
+      targetRole: DB
+      command: |
+        set -eo pipefail
+        su - db2inst1 -c "db2 -t -v <<'SQL'
+        CONNECT TO maximo USER maximo USING maximo;
+        UPDATE maxpropvalue SET propvalue='0' WHERE propname='mxe.int.enableosauth';
+        UPDATE maxpropvalue SET propvalue='1' WHERE propname='mxe.skipadminuser';
+        DELETE FROM applicationauth WHERE groupname='MAXADMIN';
+        INSERT INTO applicationauth (groupname, app, optionname, applicationauthid, conditionnum)
+          SELECT 'MAXADMIN', maxapps.app, sigoption.optionname, NEXT VALUE FOR applicationauthseq, NULL
+          FROM maxapps
+            INNER JOIN sigoption ON maxapps.app = sigoption.app
+              AND sigoption.optionname != 'NOPORTLET';
+        COMMIT;
+        TERMINATE;
+        SQL"
+      timeout: 120
+      afterAction: run-updatedb
+      autoRun: true
+    # Resets the maxadmin password to 'maxadmin' using Maximo's MXCipherX
+    # (cryptox), the cipher that maxuser.password is actually stored under in
+    # MAS Manage 9.1. Constructed with null params so MXCipherX falls back to
+    # its built-in defaults (AES/CBC/PKCS5Padding with the cryptox key/spec
+    # baked into the class) — these match what the running Maximo uses when
+    # mxe.security.cryptox.* are not set in maximo.properties or maxpropvalue,
+    # which is the case in MAS 9.1. Verified by re-encrypting wilson's known
+    # password and matching the existing maxuser.password bytes.
+    # Earlier attempts used MXCipher (the legacy "crypto" cipher with
+    # different keys) which produced ciphertext Maximo would not accept.
+    # Runs on ADM because the encryption needs Maximo's classpath.
+    # Idempotent — re-running produces the same ciphertext.
+    - id: set-maxadmin-password
+      name: Set MAXADMIN password
+      description: Encrypt 'maxadmin' via Maximo's MXCipherX (cryptox) and write it to maxuser so basic-auth logins succeed.
+      targetRole: ADM
+      command: |
+        set -eo pipefail
+        SRC=/tmp/SetMaxAdminPassword.java
+        CLS=/tmp/made-pwd-classes
+        mkdir -p "$CLS"
+        cat > "$SRC" <<'JAVA'
+        import java.sql.*;
+        import psdi.util.MXCipherX;
+        public class SetMaxAdminPassword {
+            public static void main(String[] args) throws Exception {
+                if (args.length < 2) { System.err.println("usage: SetMaxAdminPassword <loginid> <password>"); System.exit(2); }
+                String loginid = args[0];
+                String password = args[1];
+                MXCipherX c = new MXCipherX(null, null, null, null, null, null, null);
+                byte[] enc = c.encData(password);
+                String url = System.getenv("MXE_DB_URL");
+                String user = System.getenv("MXE_DB_USER");
+                String pwd  = System.getenv("MXE_DB_PASSWORD");
+                String drv  = System.getenv("MXE_DB_DRIVER");
+                Class.forName(drv);
+                try (Connection conn = DriverManager.getConnection(url, user, pwd);
+                     PreparedStatement ps = conn.prepareStatement(
+                         "UPDATE maxuser SET password=? WHERE UPPER(loginid)=UPPER(?)")) {
+                    ps.setBytes(1, enc);
+                    ps.setString(2, loginid);
+                    int rows = ps.executeUpdate();
+                    System.out.println("[set-maxadmin-password] updated " + rows + " row(s) for loginid=" + loginid);
+                }
+            }
+        }
+        JAVA
+        cd /opt/IBM/SMP/maximo/tools/maximo
+        . ./commonenv.sh > /dev/null 2>&1
+        /opt/ibm/java/bin/javac -classpath ".:./classes:$MAXIMO_CLASSPATH" -d "$CLS" "$SRC"
+        /opt/ibm/java/bin/java -classpath "$CLS:.:./classes:$MAXIMO_CLASSPATH:../../applications/maximo/properties" SetMaxAdminPassword maxadmin maxadmin
+      timeout: 60
+      afterAction: mas-fix-post-updatedb
+      autoRun: true
+    # Renames the OIDC-enabled server.xml to server-oidc.xml and promotes
+    # server-dev.xml to server.xml in the Liberty bundle so the APP container
+    # boots with basic auth instead of OIDC. The restored DB ships with a
+    # custom BueIDOIDCWebAppSession that NPEs without OIDC headers; dataload
+    # (curl -u maxadmin) only succeeds when this swap runs before APP start.
+    - id: swap-server-xml-to-dev
+      name: Swap server.xml to dev variant
+      description: Promote the dev server.xml so APP boots with basic auth instead of OIDC; also inject a defaultKeyStore and the JSESSIONIDUIMANAGE cookie binding required by the MAS Manage HF35+ shell.
+      targetRole: ADM
+      command: |
+        set -eo pipefail
+        cd /opt/IBM/SMP/maximo/deployment/was-liberty-default/deployment/maximo-all/maximo-all-server
+        if [ -f server-dev.xml ]; then
+          mv server.xml server-oidc.xml
+          mv server-dev.xml server.xml
+          echo "[swap-server-xml] Swapped to dev server.xml"
+        else
+          echo "[swap-server-xml] server-dev.xml not found; assuming already swapped"
+        fi
+        # The dev server.xml ships with ssl-1.0 + httpsPort=9443 but references
+        # defaultKeyStore/defaultTrustStore without declaring either, so Liberty
+        # silently skips binding 9443 at startup (no keystore = no HTTPS).
+        # Inject a minimal <keyStore> with a password and no location — Liberty
+        # auto-generates a self-signed cert at resources/security/key.p12 on
+        # first boot. Idempotent: only added if not already present.
+        if ! grep -q '<keyStore' server.xml; then
+          sed -i 's|</server>|<keyStore id="defaultKeyStore" password="changeit"/></server>|' server.xml
+          echo "[swap-server-xml] Injected defaultKeyStore for HTTPS auto-cert"
+        fi
+        # MAS Manage 9.1 HF35+ shell expects the session cookie to be named
+        # JSESSIONIDUIMANAGE (not the Liberty default JSESSIONID). The dev
+        # server.xml ships with the <httpSession> element commented out, so
+        # the shell can't find its expected cookie and bounces every request
+        # to login within ~50s, producing constant logouts. We uncomment it
+        # if commented, or insert it before </server> otherwise. Drop
+        # cookieSecure (no HTTPS in dev) — keep SameSite=Lax + 12h timeout.
+        if ! grep -q '<httpSession ' server.xml; then
+          if grep -q '<!--httpSession ' server.xml; then
+            sed -i 's|<!--httpSession[^/]*/-->|<httpSession cookieName="JSESSIONIDUIMANAGE" invalidateOnUnauthorizedSessionRequestException="true" invalidationTimeout="12h" cookieSameSite="Lax"/>|' server.xml
+            echo "[swap-server-xml] Uncommented httpSession with JSESSIONIDUIMANAGE"
+          else
+            sed -i 's|</server>|<httpSession cookieName="JSESSIONIDUIMANAGE" invalidateOnUnauthorizedSessionRequestException="true" invalidationTimeout="12h" cookieSameSite="Lax"/></server>|' server.xml
+            echo "[swap-server-xml] Inserted httpSession with JSESSIONIDUIMANAGE"
+          fi
+        fi
+      timeout: 60
+      afterAction: set-maxadmin-password
+      autoRun: true
+    # Pipeline marker — when BuildService reaches this step it starts the APP
+    # container so subsequent ADM actions (dataload, etc.) can reach Maximo
+    # over HTTP. Has no effect when invoked manually outside a pipeline.
+    - id: start-app
+      name: Start APP Container
+      description: Pipeline marker that starts APP so later ADM actions can reach Maximo over HTTP.
+      targetRole: APP
+      command: ":"
+      timeout: 60
+      afterAction: swap-server-xml-to-dev
+      autoRun: true
+    - id: restart-was
+      name: Restart WebSphere
+      description: Restart the WebSphere application server
+      targetRole: APP
+      command: restart
+      executionType: HOST
+      timeout: 120
+      afterAction: start-app
+      autoRun: true
+    # Runs in an ephemeral builder container (ant + JDK 8) with the env's workspace
+    # mounted at $MADE_WORKSPACE. The command must leave the artifact at
+    # /out/package.zip; Monohull then copies it into the ADM container at
+    # /tmp/made-package/ for deploy-package to apply. Not auto-run: include it in a
+    # pipeline definition for repos whose build.xml produces an addon zip.
+    - id: build-package
+      name: Build Package
+      description: Build the product addon zip from the workspace in a clean builder container (ant + JDK 8).
+      targetRole: BUILDER
+      executionType: BUILDER
+      command: |
+        set -e
+        cd "$MADE_WORKSPACE"
+        ant
+        ZIP=$(ls -1t /workspace/*.zip 2>/dev/null | head -1)
+        test -n "$ZIP" || { echo "[build-package] ant completed but no zip found in /workspace" >&2; exit 1; }
+        echo "[build-package] built $ZIP"
+        mv "$ZIP" /out/package.zip
+      timeout: 900
+      autoRun: false
+    # Applies the package produced by build-package (staged by Monohull at
+    # /tmp/made-package/package.zip) onto the Maximo install.
+    - id: deploy-package
+      name: Deploy Package
+      description: Unzip the built addon package into /opt/IBM/SMP/maximo on the ADM container.
+      targetRole: ADM
+      command: |
+        set -e
+        test -f /tmp/made-package/package.zip || { echo "[deploy-package] no staged package at /tmp/made-package/package.zip" >&2; exit 1; }
+        # unzip exits 1 for "completed with warnings" (e.g. zip entries whose names
+        # carry odd Unicode such as zero-width characters, seen in real dataload files);
+        # only codes >1 mean the extraction actually failed.
+        rc=0
+        unzip -o /tmp/made-package/package.zip -d /opt/IBM/SMP/maximo || rc=$?
+        test "$rc" -le 1 || { echo "[deploy-package] unzip failed with exit $rc" >&2; exit "$rc"; }
+        rm -rf /tmp/made-package
+        echo "[deploy-package] package applied to /opt/IBM/SMP/maximo"
+      timeout: 300
+      autoRun: false
