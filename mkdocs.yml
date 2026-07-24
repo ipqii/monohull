@@ -1,0 +1,62 @@
+site_name: Monohull
+site_description: Development environments on demand, for IBM Maximo®
+site_url: https://ipqii.github.io/monohull/
+repo_url: https://github.com/ipqii/monohull
+repo_name: ipqii/monohull
+edit_uri: edit/main/docs/
+
+copyright: >
+  Monohull is an independent open-source project and is not affiliated with,
+  endorsed by, or sponsored by IBM. IBM, Maximo®, and MAS are trademarks of
+  International Business Machines Corporation.
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Installation: install.md
+  - User guide:
+      - Concepts & navigation: guide/index.md
+      - Your first environment: guide/first-environment.md
+      - Templates, profiles & sharing: guide/templates-profiles.md
+      - Actions & pipelines: guide/actions-pipelines.md
+      - Per-pull-request builds: guide/pr-builds.md
+      - Integration-testing helpers: guide/integration-helpers.md
+      - Troubleshooting: guide/troubleshooting.md

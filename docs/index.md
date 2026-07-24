@@ -6,6 +6,9 @@ Monohull is a self-service platform that spins up complete, isolated IBM Maximo
 environments on your own Docker infrastructure — one per developer, per feature,
 or per pull request — from a single web dashboard.
 
+[Get started in 10 minutes :material-arrow-right:](quickstart.md){ .md-button .md-button--primary }
+[Install guide](install.md){ .md-button }
+
 ---
 
 ## The problem Monohull solves
@@ -141,7 +144,3 @@ restarts.
 
 > **Monohull** — Maximo environments on demand, so your developers build software
 > instead of building environments.
-
-*Monohull is an independent open-source project and is not affiliated with,
-endorsed by, or sponsored by IBM. IBM, Maximo®, and MAS are trademarks of
-International Business Machines Corporation.*

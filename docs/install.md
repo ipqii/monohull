@@ -4,11 +4,15 @@ Monohull is a single Spring Boot application (with a bundled React UI) that
 orchestrates Docker containers on a host. To run it you need a **Docker host**, a
 **MariaDB database** for its own state, and the Monohull application itself.
 
+!!! tip "In a hurry?"
+    The [Quickstart](quickstart.md) gets you from a fresh Docker host to a
+    building Maximo environment in about ten minutes using the prebuilt image.
+
 This guide covers two paths:
 
-1. **[Run with Docker Compose](#option-a--run-with-docker-compose)** — the
+1. **[Run with Docker Compose](#option-a-run-with-docker-compose)** — the
    recommended way to run Monohull on a server.
-2. **[Build and run from source](#option-b--build-and-run-from-source)** — for
+2. **[Build and run from source](#option-b-build-and-run-from-source)** — for
    developing Monohull itself.
 
 ---
@@ -58,7 +62,7 @@ services:
       start_period: 30s
 
   monohull-app:
-    image: your-registry/monohull/app:latest   # the image you build/pull
+    image: ghcr.io/ipqii/monohull:1            # prebuilt public image (or your own build)
     pull_policy: always
     ports:
       - "8806:8080"                          # Monohull UI on host port 8806

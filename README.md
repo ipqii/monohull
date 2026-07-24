@@ -83,8 +83,12 @@ Open `http://localhost:8806` and log in as `admin`. First steps in the UI:
 3. **Create environment** — pick the config, name the environment, click create, and
    watch the build log.
 
-The full walkthrough lives in [docs/INSTALL.md](docs/INSTALL.md) and
-[docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+The full walkthrough lives on the docs site:
+**[ipqii.github.io/monohull](https://ipqii.github.io/monohull/)** — [10-minute
+quickstart](https://ipqii.github.io/monohull/quickstart/), [installation
+guide](https://ipqii.github.io/monohull/install/), and the [user
+guide](https://ipqii.github.io/monohull/guide/). (Same content browsable in
+[docs/](docs/).)
 
 ## Configuration
 

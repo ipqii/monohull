@@ -58,3 +58,6 @@ Thumbs.db
 .vscode/
 # Vite build output (frontend-maven-plugin regenerates it into the jar)
 java/src/main/resources/static/
+
+# mkdocs build output
+site/

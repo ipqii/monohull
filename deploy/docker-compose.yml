@@ -3,7 +3,7 @@
 #   curl -O https://raw.githubusercontent.com/ipqii/monohull/main/deploy/docker-compose.yml
 #   MONOHULL_ADMIN_PASSWORD='choose-something' docker compose up -d
 #
-# Then open http://<host>:8806 and log in as admin. See docs/INSTALL.md for the full
+# Then open http://<host>:8806 and log in as admin. See docs/install.md for the full
 # reference (public routing, static ports, API key, Windows npipe notes).
 
 services:
