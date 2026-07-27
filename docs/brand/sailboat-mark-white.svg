@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="512" height="512" role="img" aria-label="Heeling sailboat">
+  <g transform="translate(-7 -4) rotate(18 100 162)">
+    <path d="M104 30 C111 66 118 100 128 132 L104 130 Z" fill="rgba(255,255,255,0.66)"></path>
+    <path d="M97 50 C88 84 81 110 72 138 L97 130 Z" fill="rgba(255,255,255,0.34)"></path>
+    <rect x="99" y="30" width="4" height="106" fill="#ffffff"></rect>
+    <path d="M62 138 C74 129 126 129 138 138 C128 158 115 169 100 172 C85 169 72 158 62 138 Z" fill="#ffffff"></path>
+  </g>
+</svg>

@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import {
   Box, Card, CardContent, Typography, TextField, Button, Alert,
 } from '@mui/material'
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunchRounded'
+import MonohullMark from '../components/MonohullMark'
 import AppFooter from '../components/AppFooter'
 import { useAuth } from '../auth/AuthContext'
 
@@ -60,7 +60,7 @@ export default function LoginPage() {
                 mb: 2,
               }}
             >
-              <RocketLaunchIcon sx={{ color: '#fff', fontSize: 28 }} />
+              <MonohullMark size={32} color="#fff" />
             </Box>
             <Typography variant="h5" fontWeight={800} sx={{ letterSpacing: '-0.02em' }}>
               Monohull

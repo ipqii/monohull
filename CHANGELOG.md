@@ -6,6 +6,11 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- New brand mark: a heeling sailboat replaces the rocket across the app icon, favicon,
+  PWA icons, sidebar, mobile app bar, and login card. Source artwork lives in
+  `docs/brand/`; every PNG derivative is generated from `frontend/public/monohull-icon.svg`.
+
 ### Added
 - **DB Command** on image templates and per-environment config: the argument list
   handed to the DB image's entrypoint. Database images that restore a backup only
