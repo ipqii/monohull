@@ -62,7 +62,7 @@ The left **sidebar** is the primary navigation:
 | **Actions** | Built-in and custom actions (commands you can run on containers). |
 | **Pipelines** | Ordered sequences of actions. |
 | **Repositories** | Connect git repos for per-PR builds. |
-| **Registry** | Credentials for pulling images from a private Docker registry. |
+| **Registry** | Credentials for pulling images from a private Docker registry. Once saved, the page also lists the repositories and tags the registry holds. |
 
 The user panel at the bottom of the sidebar shows who you're signed in as and a
 **sign-out** button. On a phone the sidebar collapses behind the menu icon in the
