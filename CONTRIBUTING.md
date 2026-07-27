@@ -40,7 +40,7 @@ add a new `V<n>__description.sql`.
 
 ## Pull requests
 
-- Branch from `develop`; PRs target `develop`.
+- Branch from `main`; PRs target `main`.
 - Keep PRs focused — one concern per PR.
 - Match the surrounding code style; comments explain *why*, not *what*.
 - Reference the issue in the PR description.
