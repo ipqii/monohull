@@ -20,6 +20,7 @@ These implement the standard Maximo build/configure sequence. In order, they are
 | **Run UpdateDB Pre-Processor** | ADM | Runs Maximo's UpdateDB pre-processor. |
 | **Build EAR** | ADM | Builds the Maximo EAR + Liberty bundle and publishes it to the bind-mounted config dir. |
 | **Run Maximo UpdateDB** | ADM | Runs UpdateDB (can take 30–60+ min on industry solutions). |
+| **Swap web.xml to dev variant** | ADM | Uses Maximo's `web-dev.xml` deployment descriptors so Liberty leaves authentication to Maximo. Without it the EAR carries security-constraints on `/ui/*` and `/oslc/*` with BASIC auth, and the browser shows its own credential prompt instead of Maximo's login page. Runs before **Build EAR**, since the descriptors are compiled into the EAR. |
 | **MAS pre-updatedb DB fixes** | DB | Clears stale `userdefined` flags that would otherwise break UpdateDB on a vanilla Service Provider DB. |
 | **MAS post-updatedb DB fixes** | DB | SQL fixes so the restored DB accepts MAXADMIN auth and OSLC calls. |
 | **Set MAXADMIN password** | ADM | Encrypts `maxadmin` with Maximo's cipher and writes it to `MAXUSER` so basic-auth logins work. |

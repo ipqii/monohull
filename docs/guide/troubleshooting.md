@@ -36,6 +36,17 @@ IPC, while UpdateDB connects over TCP from the ADM container.
 volume isn't mounted where the image keeps its data, so it persists nothing. See
 [DB Volume Target](templates-profiles.md#db-volume-target).
 
+**Maximo shows a browser credential popup instead of its own login page.** The EAR
+was built with Maximo's app-server-security deployment descriptors, so Liberty
+enforces a security-constraint on `/ui/*` with BASIC auth and answers before
+Maximo ever runs. No credentials will work either — the dev `server.xml` defines
+no user registry, so the role `maximouser` is unbound and the realm shows as
+`defaultRealm` rather than `MAXIMO Web Application Realm`. The **Swap web.xml to
+dev variant** action fixes this, but it has to run *before* **Build EAR**;
+re-running the pipeline is enough. The same constraint is why `/maximo/oslc/*`
+returns 401 — `mxe.int.enableosauth` is a Maximo property and cannot switch off a
+Liberty constraint.
+
 **The environment is RUNNING but Maximo won't load.** The app server can take
 several minutes to bind its ports after the containers start. Give it time, then
 check the APP container's **Logs**. A **Restart WebSphere** action or a container

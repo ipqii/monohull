@@ -12,6 +12,14 @@ All notable changes to Monohull are documented here. The format follows
   `docs/brand/`; every PNG derivative is generated from `frontend/public/monohull-icon.svg`.
 
 ### Added
+- **Swap web.xml to dev variant** pipeline action, sequenced before Build EAR. Maximo
+  ships two sets of web deployment descriptors and the ant targets that choose between
+  them are commented out in the vanilla `maximo-all.xml`, so the EAR was always built
+  with security-constraints on `/ui/*` and `/oslc/*` under BASIC auth. Liberty answered
+  those before Maximo ran, giving a browser credential popup instead of Maximo's login
+  page — and, with no user registry in the dev `server.xml`, no credentials could
+  satisfy it. This is the deployment-descriptor counterpart to the existing
+  *Swap server.xml to dev variant*.
 - **DB Command** on image templates and per-environment config: the argument list
   handed to the DB image's entrypoint. Database images that restore a backup only
   when passed an argument (e.g. `restore`) previously had no way to receive one
