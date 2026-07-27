@@ -50,6 +50,7 @@ function configToForm(config: ImageConfig): ImageConfigRequest {
     appImage: config.appImage, dbImage: config.dbImage, admImage: config.admImage,
     dbVendor: config.dbVendor, dbName: config.dbName || undefined,
     dbContainerPort: config.dbContainerPort ?? undefined,
+    dbCommand: config.dbCommand || undefined,
     hostVolumePath: config.hostVolumePath || undefined,
     dbVolumeName: config.dbVolumeName || undefined, workspacePath: config.workspacePath || undefined,
     appHttpPort: config.appHttpPort,
@@ -329,6 +330,10 @@ export default function EnvironmentConfigEditPage() {
                     placeholder="50000 / 1521"
                     helperText="Internal listener port for inter-container JDBC. Defaults: 50000 (DB2) / 1521 (Oracle)." />
                 </Box>
+                <TextField label="DB Command" value={form.dbCommand || ''} size="small"
+                  onChange={e => setForm({ ...form, dbCommand: e.target.value || undefined })} fullWidth
+                  placeholder="e.g. restore" InputProps={monoInput}
+                  helperText="Argument list passed to the DB image's entrypoint. Some images branch on it to decide whether to restore a database backup — leaving it blank means an empty database. Leave blank for images that ship the database baked in." />
               </Section>
 
               <Section id="storage" title="Storage & Paths">

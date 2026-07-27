@@ -14,7 +14,7 @@ sections):
 |---|---|
 | **Identity** | Client, Project, Maximo Version. |
 | **Images** | App / DB / ADM image references (required). |
-| **Database** | Vendor (DB2/Oracle), Database Name (default `maxdb76`), DB Container Port (internal listener; defaults 50000 DB2 / 1521 Oracle). |
+| **Database** | Vendor (DB2/Oracle), Database Name (default `maxdb76`), DB Container Port (internal listener; defaults 50000 DB2 / 1521 Oracle), [DB Command](#db-command). |
 | **Storage & Paths** | Host Volume Path (base for per-env `config/` and `logs/`), DB Volume Name, Workspace Path (a local git repo mounted at `/workspace/<name>` in APP and ADM). |
 | **Host Ports** | Optional static HTTP/HTTPS/DB and Mock/SMTP/Mailpit-UI ports, used when an environment opts into **static ports**. Leave blank to force dynamic allocation. |
 | **Pipeline** | The build pipeline run when an environment of this template is created or rebuilt. |
@@ -23,6 +23,31 @@ sections):
 Required fields (Client, Project, Maximo Version, all three images) are flagged
 in the sticky save bar until filled. The form warns before discarding unsaved
 changes.
+
+### DB Command
+
+Some Maximo database images do not ship the database inside the image. Their
+entrypoint instead branches on its **first argument** to decide what to do at
+startup — typically restoring a backup when passed something like `restore`, and
+otherwise creating an empty database.
+
+**DB Command** is that argument list. Monohull hands it to the DB container's
+entrypoint verbatim; quoting works as you'd expect, so
+`restore --file "my backup.tar.gz"` arrives as three arguments. Leave it blank
+for images that already contain the database — the container then runs the
+image's own `CMD`, which is what Monohull has always done.
+
+Getting this wrong used to be quiet and expensive: the container starts fine,
+reports itself ready, and the build only falls over several pipeline actions
+later when the first action to touch a Maximo table hits an undefined-name error.
+Monohull now checks for the Maximo schema as soon as the database reports ready
+and fails the build there, naming this setting if the entrypoint's own logs point
+at it. If your schema is created *by* a pipeline action rather than by the image,
+turn that check off with `monohull.build.verify-db-schema=false`.
+
+Whatever the image needs to *do* the restore is separate — usually credentials
+for wherever the backup lives, supplied through **DB Extras** (env vars and bind
+mounts) and the per-environment **Database Password**.
 
 ---
 

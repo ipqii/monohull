@@ -38,6 +38,10 @@ public class EnvironmentConfigEntity {
     @Column(name = "db_password")
     private String dbPassword;
 
+    /** Command (argv) passed to the DB container's entrypoint. Blank => the image's own CMD. */
+    @Column(name = "db_command", length = 500)
+    private String dbCommand;
+
     @Column(name = "mock_enabled", nullable = false)
     private boolean mockEnabled;
 
@@ -108,6 +112,9 @@ public class EnvironmentConfigEntity {
 
     public String getDbPassword() { return dbPassword; }
     public void setDbPassword(String dbPassword) { this.dbPassword = dbPassword; }
+
+    public String getDbCommand() { return dbCommand; }
+    public void setDbCommand(String dbCommand) { this.dbCommand = dbCommand; }
 
     public boolean isMockEnabled() { return mockEnabled; }
     public void setMockEnabled(boolean mockEnabled) { this.mockEnabled = mockEnabled; }

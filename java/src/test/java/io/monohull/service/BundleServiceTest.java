@@ -52,7 +52,7 @@ class BundleServiceTest {
         return new ImageConfigPayload(
             "acme", "eam", "7.6.1.3",
             "app:1", "db:1", "adm:1",
-            "DB2", "maxdb76", null,
+            "DB2", "maxdb76", null, null,
             null, null, null,
             null, null, null, null, null, null,
             null, null, null, null, null, null);

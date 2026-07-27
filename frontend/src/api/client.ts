@@ -34,6 +34,7 @@ export interface ImageConfig {
   dbVendor: string
   dbName: string | null
   dbContainerPort: number | null
+  dbCommand: string | null
   hostVolumePath: string | null
   dbVolumeName: string | null
   workspacePath: string | null
@@ -79,6 +80,7 @@ export interface ImageConfigRequest {
   dbVendor: string
   dbName?: string
   dbContainerPort?: number
+  dbCommand?: string
   hostVolumePath?: string
   dbVolumeName?: string
   workspacePath?: string
@@ -169,6 +171,7 @@ export interface ConfigResponse {
   appHttpsPort: number | null
   dbPort: number | null
   dbPassword: string | null
+  dbCommand: string | null
   dbExtraEnv: ExtraEnvVar[] | null
   dbExtraBinds: ExtraBind[] | null
   appExtraEnv: ExtraEnvVar[] | null

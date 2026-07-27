@@ -68,6 +68,12 @@ public class BuildService {
     @Value("${monohull.public.maximo-domain:}")
     private String maximoDomain;
 
+    // Whether to assert the Maximo schema exists before running pipeline actions.
+    // Turn this off only when the schema is created *by* a pipeline action (e.g. a
+    // restore step) rather than by the DB image itself.
+    @Value("${monohull.build.verify-db-schema:true}")
+    private boolean verifyDbSchema;
+
     public BuildService(DockerService docker, LogSink logs,
                         EnvironmentRepository envRepo, ContainerRepository containerRepo,
                         BuildLogRepository logRepo, ActionService actionService) {
@@ -96,7 +102,7 @@ public class BuildService {
                 req.dbPort(), dbContainerPort,
                 req.dbVolumeName() == null ? "maximo-db-volume" : req.dbVolumeName(),
                 req.dbImage().contains("db2") ? "/database" : "/opt/oracle",
-                List.of("MAXIMO_VERSION=unknown"), null, "db", logger);
+                List.of("MAXIMO_VERSION=unknown"), null, req.dbCommand(), "db", logger);
 
             List<Bind> appBinds = new ArrayList<>();
             if (req.appConfigHostPath() != null)
@@ -192,6 +198,7 @@ public class BuildService {
 
             if (dbContainer != null) {
                 waitForDbReady(dbContainer, logger);
+                verifyMaximoSchema(dbContainer, env, logger);
             }
 
             env.setStatus(EnvironmentStatus.CONFIGURING);
@@ -473,7 +480,8 @@ public class BuildService {
                 List<Bind> dbExtraBinds = toBinds(config != null ? config.getDbExtraBinds() : null);
                 yield docker.runDbContainer(c.getContainerName(), c.getImage(), env.getNetworkName(),
                     hostPort, containerPort, volumeName, volumeTarget,
-                    dbEnv, dbExtraBinds, networkAlias, logger);
+                    dbEnv, dbExtraBinds, config != null ? config.getDbCommand() : null,
+                    networkAlias, logger);
             }
             case APP -> {
                 List<Bind> binds = new ArrayList<>();
@@ -771,6 +779,119 @@ public class BuildService {
             }
         }
         throw new RuntimeException(dbType + " database did not become ready after " + (maxAttempts * intervalSeconds) + " seconds");
+    }
+
+    /**
+     * Assert the Maximo schema actually exists before any pipeline action touches it.
+     *
+     * <p>"DB ready" only means the instance is up and the database exists — not that it has
+     * a Maximo schema in it. A DB image that creates an empty database (because it was never
+     * told to restore a backup, or the restore failed) still reaches the ready marker, and
+     * the build then runs the whole pipeline against an empty DB. The first action to touch
+     * a Maximo table dies with a bare vendor error — DB2 exits 4 with SQL0204N "undefined
+     * name" — several minutes and several steps away from the real cause.
+     *
+     * <p>Failing here instead puts the error next to the thing that caused it. The probe is
+     * a plain existence check on a core Maximo table; MAXIMO is the schema owner Monohull
+     * assumes throughout (see MXE_DB_SCHEMAOWNER in the APP container env).
+     *
+     * <p>DB2 only for now, mirroring {@link #configureSmtpProperties}. Disable via
+     * {@code monohull.build.verify-db-schema=false} when a pipeline action is what creates
+     * the schema.
+     */
+    private void verifyMaximoSchema(ContainerEntity dbContainer, EnvironmentEntity env,
+                                    Consumer<String> logger) {
+        if (!verifyDbSchema) return;
+        if (dbContainer.getDockerContainerId() == null) return;
+        if (!dbContainer.getImage().contains("db2")) {
+            logger.accept("[db-verify] Schema check is DB2-only; skipping for this image.");
+            return;
+        }
+        String dbName = env.getImageConfig() != null && env.getImageConfig().getDbName() != null
+            ? env.getImageConfig().getDbName() : "maxdb76";
+
+        // One CLP session for both statements: each `db2 ...` invocation is its own process,
+        // so a CONNECT issued separately is already gone by the next call (SQL1024N). COUNT(*)
+        // rather than a row fetch, so an existing-but-empty table still returns a row and
+        // can't be confused with a missing one via SQL0100W.
+        String script = String.join("\n",
+            "su - db2inst1 -c \"db2 -t <<'SQL_EOF'",
+            "CONNECT TO " + dbName + ";",
+            "SELECT COUNT(*) FROM MAXIMO.MAXOBJECT;",
+            "TERMINATE;",
+            "SQL_EOF",
+            "\"");
+
+        StringBuilder out = new StringBuilder();
+        logger.accept("[db-verify] Checking that the Maximo schema exists in " + dbName + "...");
+        int rc = docker.execInContainer(dbContainer.getDockerContainerId(), script, null, 60,
+            line -> out.append(line));
+        if (rc == 0) {
+            logger.accept("[db-verify] Maximo schema present.");
+            return;
+        }
+
+        for (String line : db2MessageLines(out.toString())) {
+            logger.accept("[db-verify] " + line);
+        }
+        for (String hint : diagnoseEmptyDb(dbContainer)) {
+            logger.accept("[hint] " + hint);
+        }
+        throw new RuntimeException("Database '" + dbName + "' has no Maximo schema (MAXIMO.MAXOBJECT "
+            + "is not there). The DB container came up but its database is empty, so every pipeline "
+            + "action that touches Maximo tables would fail. Fix the database before rebuilding.");
+    }
+
+    /**
+     * Pull the diagnosis out of DB2 CLP output. Fed a script on stdin the CLP prints its
+     * interactive banner and prefixes each echoed statement with a {@code db2 => } prompt,
+     * which buries the one line that matters ("SQL0204N ... is an undefined name"). Keep
+     * only lines carrying an SQLnnnn / DB2nnnn message code, prompt stripped.
+     */
+    static List<String> db2MessageLines(String rawOutput) {
+        if (rawOutput == null) return List.of();
+        return rawOutput.lines()
+            .map(l -> l.replaceFirst("^\\s*db2 => ", "").trim())
+            .filter(l -> l.matches("^(SQL|DB2)\\d.*"))
+            .toList();
+    }
+
+    /**
+     * Turn an empty database into actionable hints by reading what the DB image's entrypoint
+     * said on startup. The Maximo DB2 images log their chosen mode as
+     * {@code [echopoint] Chosen option: <arg>} and fall through to creating an empty database
+     * when that argument is missing, so an empty option is a direct pointer at the DB Command
+     * setting rather than at the database itself.
+     */
+    private List<String> diagnoseEmptyDb(ContainerEntity dbContainer) {
+        List<String> hints = new ArrayList<>();
+        List<String> lines;
+        try {
+            lines = docker.fetchContainerLogs(dbContainer.getDockerContainerId(), 500);
+        } catch (Exception e) {
+            return hints;
+        }
+
+        boolean emptyOption = lines.stream()
+            .filter(l -> l.contains("[echopoint] Chosen option:"))
+            .anyMatch(l -> l.substring(l.indexOf("Chosen option:") + "Chosen option:".length()).isBlank());
+        boolean created = lines.stream().anyMatch(l -> l.contains("Creating Maximo DB"));
+        boolean restored = lines.stream().anyMatch(l -> l.contains("Restoring"));
+
+        if (emptyOption) {
+            hints.add("The DB entrypoint logged an empty \"Chosen option\", so it created an empty "
+                + "database instead of restoring one. Set the DB Command on the image config "
+                + "(or this environment's Configuration tab) to the argument the image expects "
+                + "-- commonly \"restore\" -- and rebuild.");
+        }
+        if (created && !restored) {
+            hints.add("The entrypoint ran its create-database path and never logged a restore.");
+        }
+        if (restored) {
+            hints.add("The entrypoint did start a restore -- check the DB container logs for why "
+                + "it did not finish (missing credentials for the backup source are a common cause).");
+        }
+        return hints;
     }
 
     private void waitForAppReady(ContainerEntity appContainer, Consumer<String> logger) {

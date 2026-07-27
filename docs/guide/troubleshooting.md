@@ -4,6 +4,21 @@
 build output, and the **Pipeline** tab to see which step failed and its exit code.
 Fix the cause (bad image tag, DB issue, etc.) and use **Re-run Pipeline**.
 
+**The build stops with "has no Maximo schema".** The DB container started and
+reported ready, but its database is empty, so Monohull stopped before any pipeline
+action could fail against it. The usual cause is a DB image that restores a backup
+only when its entrypoint is given an argument, with no
+[**DB Command**](templates-profiles.md#db-command) set — the build log's `[hint]`
+lines say so when the image's own startup output shows it. Set DB Command on the
+template (or the environment's **Configuration** tab), remove the environment's DB
+volume so the entrypoint re-runs its restore, and rebuild. If your schema is meant
+to be created by a pipeline action instead, set
+`monohull.build.verify-db-schema=false`.
+
+**A DB action fails with `SQL0204N ... is an undefined name` (DB2 exit 4).** Same
+root cause as above on an environment built before that check existed: the table
+the action wants isn't there because the database was never populated.
+
 **The environment is RUNNING but Maximo won't load.** The app server can take
 several minutes to bind its ports after the containers start. Give it time, then
 check the APP container's **Logs**. A **Restart WebSphere** action or a container

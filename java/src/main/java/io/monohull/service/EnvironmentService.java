@@ -96,6 +96,7 @@ public class EnvironmentService {
 
         // Inherit container extras (env vars + binds) from the image config; the user can
         // still edit them per-environment afterwards via the Configuration tab.
+        config.setDbCommand(imageConfig.getDbCommand());
         config.setDbExtraEnv(imageConfig.getDbExtraEnv());
         config.setDbExtraBinds(imageConfig.getDbExtraBinds());
         config.setAppExtraEnv(imageConfig.getAppExtraEnv());

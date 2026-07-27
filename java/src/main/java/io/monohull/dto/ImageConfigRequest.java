@@ -14,6 +14,7 @@ public record ImageConfigRequest(
     @NotBlank String dbVendor,
     String dbName,
     Integer dbContainerPort,
+    String dbCommand,
     String hostVolumePath,
     String dbVolumeName,
     String workspacePath,

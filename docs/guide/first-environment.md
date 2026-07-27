@@ -114,6 +114,9 @@ Per-environment overrides (distinct from the template):
 - **HTTP / HTTPS / DB Port**.
 - **Database Password** — passed to the DB container as `MAXIMO_DB_PASSWORD`; used
   by in-container scripts (e.g. database restore).
+- **DB Command** — argument list handed to the DB image's entrypoint. Inherited
+  from the template; applies on the next rebuild. See
+  [DB Command](templates-profiles.md#db-command).
 - **Pipeline (override)** — run a different pipeline than the template's default.
 - **DB / APP / ADM container extras** — extra environment variables and bind
   mounts for each container.

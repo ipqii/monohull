@@ -4,6 +4,19 @@ All notable changes to Monohull are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and Monohull uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **DB Command** on image templates and per-environment config: the argument list
+  handed to the DB image's entrypoint. Database images that restore a backup only
+  when passed an argument (e.g. `restore`) previously had no way to receive one
+  from Monohull, so they silently came up with an empty database.
+- The database is now checked for a Maximo schema as soon as it reports ready, and
+  the build fails there — naming DB Command when the image's own startup log shows
+  it took no restore branch — instead of surfacing several pipeline actions later
+  as a bare vendor error. Set `monohull.build.verify-db-schema=false` when a
+  pipeline action is what creates the schema.
+
 ## [1.0.0] — 2026-07-24
 
 First public release.

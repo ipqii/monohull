@@ -1075,6 +1075,14 @@ export default function EnvironmentDetailPage() {
                 fullWidth size="small"
                 autoComplete="new-password"
               />
+              <TextField
+                label="DB Command"
+                defaultValue={config.dbCommand || ''}
+                onBlur={e => configMutation.mutate({ ...config, dbCommand: e.target.value || null })}
+                helperText="Argument list passed to the DB image's entrypoint (e.g. restore). Inherited from the image config; applies on the next rebuild."
+                fullWidth size="small"
+                InputProps={{ sx: { fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8rem' } }}
+              />
 
               <FormControl fullWidth size="small">
                 <InputLabel>Pipeline (override)</InputLabel>

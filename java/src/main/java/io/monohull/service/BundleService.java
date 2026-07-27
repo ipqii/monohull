@@ -48,7 +48,7 @@ public class BundleService {
         ImageConfigPayload icPayload = new ImageConfigPayload(
             ic.getClient(), ic.getProject(), ic.getMaximoVersion(),
             ic.getAppImage(), ic.getDbImage(), ic.getAdmImage(),
-            ic.getDbVendor(), ic.getDbName(), ic.getDbContainerPort(),
+            ic.getDbVendor(), ic.getDbName(), ic.getDbContainerPort(), ic.getDbCommand(),
             ic.getHostVolumePath(), ic.getDbVolumeName(), ic.getWorkspacePath(),
             ic.getAppHttpPort(), ic.getAppHttpsPort(), ic.getDbPort(),
             ic.getMockHostPort(), ic.getSmtpHostPort(), ic.getSmtpUiHostPort(),
@@ -235,6 +235,7 @@ public class BundleService {
         ice.setDbVendor(ic.dbVendor());
         ice.setDbName(ic.dbName());
         ice.setDbContainerPort(ic.dbContainerPort());
+        ice.setDbCommand(ic.dbCommand());
         ice.setHostVolumePath(ic.hostVolumePath());
         ice.setDbVolumeName(ic.dbVolumeName());
         ice.setWorkspacePath(ic.workspacePath());

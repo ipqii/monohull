@@ -43,6 +43,11 @@ public class ImageConfigEntity {
     @Column(name = "db_container_port")
     private Integer dbContainerPort;
 
+    /** Default command (argv) passed to the DB container's entrypoint. Inherited by each
+     *  environment created from this image config; blank => the image's own CMD. */
+    @Column(name = "db_command", length = 500)
+    private String dbCommand;
+
     @Column(name = "host_volume_path")
     private String hostVolumePath;
 
@@ -148,6 +153,9 @@ public class ImageConfigEntity {
 
     public Integer getDbContainerPort() { return dbContainerPort; }
     public void setDbContainerPort(Integer dbContainerPort) { this.dbContainerPort = dbContainerPort; }
+
+    public String getDbCommand() { return dbCommand; }
+    public void setDbCommand(String dbCommand) { this.dbCommand = dbCommand; }
 
     public String getHostVolumePath() { return hostVolumePath; }
     public void setHostVolumePath(String hostVolumePath) { this.hostVolumePath = hostVolumePath; }
