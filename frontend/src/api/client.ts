@@ -37,6 +37,7 @@ export interface ImageConfig {
   dbCommand: string | null
   hostVolumePath: string | null
   dbVolumeName: string | null
+  dbVolumeTarget: string | null
   workspacePath: string | null
   appHttpPort: number | null
   appHttpsPort: number | null
@@ -83,6 +84,7 @@ export interface ImageConfigRequest {
   dbCommand?: string
   hostVolumePath?: string
   dbVolumeName?: string
+  dbVolumeTarget?: string
   workspacePath?: string
   appHttpPort?: number | null
   appHttpsPort?: number | null

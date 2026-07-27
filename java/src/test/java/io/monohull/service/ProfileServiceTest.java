@@ -113,7 +113,7 @@ class ProfileServiceTest {
         return new ImageConfigBundle(ImageConfigBundle.KIND, 2,
             new ImageConfigPayload("Acme", "EAM", "7.6.1.3",
                 "app:1", "db:1", "adm:1", "DB2", null, null, null,
-                null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, null,
                 null, null, null, null, null, null),
             null, List.of(), null);
     }

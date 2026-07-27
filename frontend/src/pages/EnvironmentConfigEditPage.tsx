@@ -52,7 +52,9 @@ function configToForm(config: ImageConfig): ImageConfigRequest {
     dbContainerPort: config.dbContainerPort ?? undefined,
     dbCommand: config.dbCommand || undefined,
     hostVolumePath: config.hostVolumePath || undefined,
-    dbVolumeName: config.dbVolumeName || undefined, workspacePath: config.workspacePath || undefined,
+    dbVolumeName: config.dbVolumeName || undefined,
+    dbVolumeTarget: config.dbVolumeTarget || undefined,
+    workspacePath: config.workspacePath || undefined,
     appHttpPort: config.appHttpPort,
     appHttpsPort: config.appHttpsPort,
     dbPort: config.dbPort,
@@ -344,6 +346,10 @@ export default function EnvironmentConfigEditPage() {
                   <TextField label="DB Volume Name" value={form.dbVolumeName || ''} size="small"
                     onChange={e => setForm({ ...form, dbVolumeName: e.target.value || undefined })} fullWidth />
                 </Box>
+                <TextField label="DB Volume Target" value={form.dbVolumeTarget || ''} size="small"
+                  onChange={e => setForm({ ...form, dbVolumeTarget: e.target.value || undefined })} fullWidth
+                  placeholder="/database" InputProps={monoInput}
+                  helperText="Where the database volume is mounted inside the DB container. Must be the path the image actually writes its data to, or the volume persists nothing and the database is lost when the container is recreated. Blank uses /database (DB2) or /opt/oracle (Oracle)." />
                 <TextField label="Workspace Path" value={form.workspacePath || ''} size="small"
                   onChange={e => setForm({ ...form, workspacePath: e.target.value || undefined })} fullWidth
                   placeholder="e.g. /git/repo/LOAMIS" InputProps={monoInput}

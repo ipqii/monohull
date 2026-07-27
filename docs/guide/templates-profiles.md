@@ -15,7 +15,7 @@ sections):
 | **Identity** | Client, Project, Maximo Version. |
 | **Images** | App / DB / ADM image references (required). |
 | **Database** | Vendor (DB2/Oracle), Database Name (default `maxdb76`), DB Container Port (internal listener; defaults 50000 DB2 / 1521 Oracle), [DB Command](#db-command). |
-| **Storage & Paths** | Host Volume Path (base for per-env `config/` and `logs/`), DB Volume Name, Workspace Path (a local git repo mounted at `/workspace/<name>` in APP and ADM). |
+| **Storage & Paths** | Host Volume Path (base for per-env `config/` and `logs/`), DB Volume Name, [DB Volume Target](#db-volume-target), Workspace Path (a local git repo mounted at `/workspace/<name>` in APP and ADM). |
 | **Host Ports** | Optional static HTTP/HTTPS/DB and Mock/SMTP/Mailpit-UI ports, used when an environment opts into **static ports**. Leave blank to force dynamic allocation. |
 | **Pipeline** | The build pipeline run when an environment of this template is created or rebuilt. |
 | **DB / APP / ADM Extras** | Extra env vars and bind mounts applied to each container role. |
@@ -48,6 +48,50 @@ turn that check off with `monohull.build.verify-db-schema=false`.
 Whatever the image needs to *do* the restore is separate — usually credentials
 for wherever the backup lives, supplied through **DB Extras** (env vars and bind
 mounts) and the per-environment **Database Password**.
+
+### DB Volume Target
+
+Where the environment's database volume is mounted inside the DB container. It
+has to be the path the image actually writes its data to. Blank uses
+`/database` for DB2 and `/opt/oracle` for Oracle.
+
+Getting this wrong doesn't error. The volume mounts over an empty directory, the
+database is written to the container's writable layer instead, and everything
+works — until the container is recreated, at which point the database is gone
+and a restore has to run again from scratch. If a rebuild keeps re-restoring a
+database you thought was persisted, this is why.
+
+To find the right path, ask the running container where the database is. For
+DB2:
+
+```bash
+docker exec <env>-db su - db2inst1 -c "db2 list db directory" | grep -i "local database directory"
+```
+
+Then check whether the volume is actually holding anything:
+
+```bash
+docker exec <env>-db du -sh /database
+```
+
+A few kilobytes means the volume is empty and the target is wrong.
+
+### Database checks before the pipeline runs
+
+Once the DB container reports ready, Monohull checks two things before any
+pipeline action touches the database, and fails the build there if either is
+wrong:
+
+- **The listener** — that something is accepting connections on
+  [DB Container Port](#environments-image-templates). This is the port UpdateDB,
+  the APP container's JDBC URL, and the published host port all use. DB2 resolves
+  its port through a service *name* in `SVCENAME`, so a mismatch is easy to miss;
+  when the check fails on DB2 it reports the port the image is really on.
+- **The schema** — that the Maximo tables exist. See
+  [DB Command](#db-command) for why they might not.
+
+Both are gated by `monohull.build.verify-db-schema`, which defaults to `true`.
+Set it to `false` when a pipeline action is what creates the schema.
 
 ---
 

@@ -21,6 +21,17 @@ All notable changes to Monohull are documented here. The format follows
   it took no restore branch — instead of surfacing several pipeline actions later
   as a bare vendor error. Set `monohull.build.verify-db-schema=false` when a
   pipeline action is what creates the schema.
+- The same check now also confirms the database is listening on **DB Container
+  Port** before the pipeline runs. DB-role actions use the local command-line
+  processor over IPC and pass regardless, so a wrong port previously surfaced as a
+  `Connection refused` stack trace from UpdateDB several steps later. On DB2 the
+  failure reports the port the image is really on, resolved through `SVCENAME`.
+- **DB Volume Target** on image templates: where the database volume is mounted
+  inside the DB container. It was hardcoded to `/database` (DB2) and `/opt/oracle`
+  (Oracle), which silently persists nothing when an image keeps its data elsewhere
+  — the database ends up in the container's writable layer and is lost whenever the
+  container is recreated. Blank keeps the previous defaults, and the build log now
+  says which default it used.
 
 ## [1.0.0] — 2026-07-24
 

@@ -17,6 +17,7 @@ public record ImageConfigRequest(
     String dbCommand,
     String hostVolumePath,
     String dbVolumeName,
+    String dbVolumeTarget,
     String workspacePath,
     Integer appHttpPort,
     Integer appHttpsPort,

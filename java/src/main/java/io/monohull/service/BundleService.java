@@ -49,7 +49,8 @@ public class BundleService {
             ic.getClient(), ic.getProject(), ic.getMaximoVersion(),
             ic.getAppImage(), ic.getDbImage(), ic.getAdmImage(),
             ic.getDbVendor(), ic.getDbName(), ic.getDbContainerPort(), ic.getDbCommand(),
-            ic.getHostVolumePath(), ic.getDbVolumeName(), ic.getWorkspacePath(),
+            ic.getHostVolumePath(), ic.getDbVolumeName(), ic.getDbVolumeTarget(),
+            ic.getWorkspacePath(),
             ic.getAppHttpPort(), ic.getAppHttpsPort(), ic.getDbPort(),
             ic.getMockHostPort(), ic.getSmtpHostPort(), ic.getSmtpUiHostPort(),
             ic.getDbExtraEnv(), ic.getDbExtraBinds(),
@@ -238,6 +239,7 @@ public class BundleService {
         ice.setDbCommand(ic.dbCommand());
         ice.setHostVolumePath(ic.hostVolumePath());
         ice.setDbVolumeName(ic.dbVolumeName());
+        ice.setDbVolumeTarget(ic.dbVolumeTarget());
         ice.setWorkspacePath(ic.workspacePath());
         ice.setAppHttpPort(ic.appHttpPort());
         ice.setAppHttpsPort(ic.appHttpsPort());

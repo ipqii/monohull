@@ -48,6 +48,11 @@ public class ImageConfigEntity {
     @Column(name = "db_command", length = 500)
     private String dbCommand;
 
+    /** Where the environment's database volume is mounted inside the DB container.
+     *  Blank => the per-vendor default (/database for DB2, /opt/oracle for Oracle). */
+    @Column(name = "db_volume_target", length = 255)
+    private String dbVolumeTarget;
+
     @Column(name = "host_volume_path")
     private String hostVolumePath;
 
@@ -156,6 +161,9 @@ public class ImageConfigEntity {
 
     public String getDbCommand() { return dbCommand; }
     public void setDbCommand(String dbCommand) { this.dbCommand = dbCommand; }
+
+    public String getDbVolumeTarget() { return dbVolumeTarget; }
+    public void setDbVolumeTarget(String dbVolumeTarget) { this.dbVolumeTarget = dbVolumeTarget; }
 
     public String getHostVolumePath() { return hostVolumePath; }
     public void setHostVolumePath(String hostVolumePath) { this.hostVolumePath = hostVolumePath; }

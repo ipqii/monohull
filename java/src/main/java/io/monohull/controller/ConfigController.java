@@ -67,6 +67,7 @@ public class ConfigController {
         entity.setDbCommand(req.dbCommand());
         entity.setHostVolumePath(req.hostVolumePath());
         entity.setDbVolumeName(req.dbVolumeName());
+        entity.setDbVolumeTarget(req.dbVolumeTarget());
         entity.setWorkspacePath(req.workspacePath());
         entity.setAppHttpPort(req.appHttpPort());
         entity.setAppHttpsPort(req.appHttpsPort());
@@ -103,6 +104,7 @@ public class ConfigController {
         entity.setDbCommand(req.dbCommand());
         entity.setHostVolumePath(req.hostVolumePath());
         entity.setDbVolumeName(req.dbVolumeName());
+        entity.setDbVolumeTarget(req.dbVolumeTarget());
         entity.setWorkspacePath(req.workspacePath());
         entity.setAppHttpPort(req.appHttpPort());
         entity.setAppHttpsPort(req.appHttpsPort());
@@ -208,7 +210,7 @@ public class ConfigController {
         return new ImageConfigResponse(e.getId(), e.getClient(), e.getProject(),
             e.getMaximoVersion(), e.getAppImage(), e.getDbImage(), e.getAdmImage(),
             e.getDbVendor(), e.getDbName(), e.getDbContainerPort(), e.getDbCommand(),
-            e.getHostVolumePath(), e.getDbVolumeName(),
+            e.getHostVolumePath(), e.getDbVolumeName(), e.getDbVolumeTarget(),
             e.getWorkspacePath(),
             e.getAppHttpPort(), e.getAppHttpsPort(), e.getDbPort(),
             e.getMockHostPort(), e.getSmtpHostPort(), e.getSmtpUiHostPort(),
