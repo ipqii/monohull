@@ -4,6 +4,7 @@ import com.github.dockerjava.api.exception.DockerException;
 import io.monohull.dto.BundleConflictResponse;
 import io.monohull.service.BundleConflictException;
 import io.monohull.service.DockerErrors;
+import io.monohull.service.RegistryUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,5 +54,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDocker(DockerException ex) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
             .body(Map.of("error", DockerErrors.explain(ex)));
+    }
+
+    /**
+     * The private registry was unreachable or refused us (MH-20). 502 for the same reason
+     * as Docker failures: the upstream is what broke, not Monohull. The messages are
+     * already written for the user, so pass them straight through.
+     */
+    @ExceptionHandler(RegistryUnavailableException.class)
+    public ResponseEntity<Map<String, String>> handleRegistry(RegistryUnavailableException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", ex.getMessage()));
     }
 }

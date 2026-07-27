@@ -447,6 +447,23 @@ export const saveRegistryCredential = (req: RegistryCredentialRequest) =>
   api.put<RegistryCredential>('/config/registry', req).then(r => r.data)
 export const deleteRegistryCredential = () => api.delete('/config/registry')
 
+// Browsing the registry contents (MH-20)
+export interface RegistryCatalog {
+  registry: string
+  repositories: string[]
+  truncated: boolean
+}
+
+export interface RegistryTags {
+  repository: string
+  tags: string[]
+}
+
+export const getRegistryCatalog = () =>
+  api.get<RegistryCatalog>('/config/registry/catalog').then(r => r.data)
+export const getRegistryTags = (repository: string) =>
+  api.get<RegistryTags>('/config/registry/tags', { params: { repository } }).then(r => r.data)
+
 // Auth
 export interface AuthUser {
   username: string
