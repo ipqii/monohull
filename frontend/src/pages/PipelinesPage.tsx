@@ -17,7 +17,7 @@ import {
 } from '../api/client'
 import {
   DndContext, DragOverlay, useDraggable, useDroppable,
-  DragStartEvent, DragEndEvent, pointerWithin, rectIntersection,
+  DragStartEvent, DragMoveEvent, DragEndEvent, pointerWithin, rectIntersection,
   PointerSensor, TouchSensor, useSensor, useSensors,
   type CollisionDetection,
 } from '@dnd-kit/core'
@@ -26,12 +26,49 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import yaml from 'js-yaml'
+import ActionDefinitionLink from '../components/ActionDefinitionLink'
 
 interface PipelineStepLocal {
   instanceId: string
   actionKey: string
   actionName: string
   targetRole: string
+}
+
+/** Vertical margin between step cards — the gap that opens has to account for it. */
+const STEP_CARD_GAP = 8
+
+/**
+ * Where a card dragged in from the palette would land, or null when the pointer isn't over the
+ * pipeline. Insert before or after the hovered step depending on which half the pointer is in,
+ * so the last position is reachable without having to find empty space below the list.
+ *
+ * `over.rect` is measured ignoring transforms, so the midpoint stays where the step was before
+ * the gap opened — the answer can't flip back and forth as the cards move out of the way.
+ */
+function insertionPointFor(
+  event: DragMoveEvent | DragEndEvent,
+  steps: PipelineStepLocal[],
+): { index: number; gap: number } | null {
+  const { over, delta, activatorEvent } = event
+  if (!over) return null
+  if (over.id === 'pipeline-drop-area') return { index: steps.length, gap: 0 }
+
+  const hovered = steps.findIndex(s => s.instanceId === over.id)
+  if (hovered < 0) return null
+
+  const gap = over.rect.height + STEP_CARD_GAP
+  const pointerY = activatorPointerY(activatorEvent)
+  if (pointerY == null) return { index: hovered, gap }
+
+  const belowMidpoint = pointerY + delta.y > over.rect.top + over.rect.height / 2
+  return { index: belowMidpoint ? hovered + 1 : hovered, gap }
+}
+
+function activatorPointerY(event: Event): number | null {
+  if ('clientY' in event) return (event as PointerEvent).clientY
+  const touch = (event as TouchEvent).touches?.[0] ?? (event as TouchEvent).changedTouches?.[0]
+  return touch ? touch.clientY : null
 }
 
 type EditorMode = 'form' | 'yaml'
@@ -107,6 +144,7 @@ function DraggableActionCard({ action }: { action: CustomAction }) {
         ref={setNodeRef}
         {...listeners}
         {...attributes}
+        data-testid="palette-action"
         sx={{
           p: 1.5,
           mb: 1,
@@ -138,21 +176,30 @@ function DraggableActionCard({ action }: { action: CustomAction }) {
             size="small"
             sx={{ fontSize: '0.65rem', height: 20, bgcolor: 'rgba(99,102,241,0.1)', color: '#818cf8', border: 'none', flexShrink: 0 }}
           />
+          <ActionDefinitionLink actionId={action.id} />
         </Stack>
       </Paper>
     </Tooltip>
   )
 }
 
-function SortableStepCard({ step, index, onRemove }: { step: PipelineStepLocal; index: number; onRemove: () => void }) {
+function SortableStepCard({ step, index, actionId, shift, onRemove }: {
+  step: PipelineStepLocal; index: number; actionId: number | null; shift: number; onRemove: () => void
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: step.instanceId,
     data: { type: 'pipeline-step' },
   })
 
+  // `shift` opens the gap for an action being dragged in from the palette. Sortable's own
+  // transform is null in that case (the dragged item isn't one of its items), but compose them
+  // anyway so the two can never fight.
+  const sortableTransform = CSS.Transform.toString(transform)
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: shift
+      ? [sortableTransform, `translate3d(0, ${shift}px, 0)`].filter(Boolean).join(' ')
+      : sortableTransform,
+    transition: transition ?? 'transform 180ms cubic-bezier(0.2, 0, 0, 1)',
     opacity: isDragging ? 0.4 : 1,
   }
 
@@ -160,6 +207,7 @@ function SortableStepCard({ step, index, onRemove }: { step: PipelineStepLocal; 
     <Paper
       ref={setNodeRef}
       style={style}
+      data-testid="pipeline-step"
       sx={{
         p: 1.5,
         mb: 1,
@@ -191,6 +239,7 @@ function SortableStepCard({ step, index, onRemove }: { step: PipelineStepLocal; 
           variant="outlined"
           sx={{ fontSize: '0.65rem', height: 20, borderColor: 'rgba(148,163,184,0.15)' }}
         />
+        <ActionDefinitionLink actionId={actionId} />
         <Tooltip title="Remove step">
           <IconButton size="small" onClick={onRemove} sx={{ color: '#64748b', '&:hover': { color: '#ef4444' } }}>
             <DeleteIcon fontSize="small" />
@@ -201,7 +250,7 @@ function SortableStepCard({ step, index, onRemove }: { step: PipelineStepLocal; 
   )
 }
 
-function DroppablePipelineArea({ children }: { children: React.ReactNode }) {
+function DroppablePipelineArea({ tailSpace, children }: { tailSpace: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'pipeline-drop-area' })
   return (
     <Box
@@ -209,6 +258,9 @@ function DroppablePipelineArea({ children }: { children: React.ReactNode }) {
       sx={{
         minHeight: 200,
         p: 1.5,
+        // Cards make way with a transform, which doesn't grow the box — pad the bottom by the
+        // same amount so the last one doesn't hang below the dashed border.
+        pb: tailSpace ? `${tailSpace + 12}px` : 1.5,
         border: '2px dashed',
         borderColor: isOver ? 'rgba(99, 102, 241, 0.4)' : 'rgba(148, 163, 184, 0.08)',
         borderRadius: 2.5,
@@ -230,6 +282,7 @@ export default function PipelinesPage() {
   const [pipelineEnvId, setPipelineEnvId] = useState<number | null>(null)
   const [steps, setSteps] = useState<PipelineStepLocal[]>([])
   const [activeAction, setActiveAction] = useState<CustomAction | null>(null)
+  const [insertion, setInsertion] = useState<{ index: number; gap: number } | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>('form')
   const [yamlText, setYamlText] = useState('')
   const [yamlError, setYamlError] = useState<string | null>(null)
@@ -433,10 +486,28 @@ export default function PipelinesPage() {
     } else {
       setActiveAction(null)
     }
+    setInsertion(null)
+  }
+
+  // Shows where the dragged action would land by moving the steps below it out of the way.
+  // Only for palette drags — reordering an existing step is already animated by useSortable.
+  const handleDragMove = (event: DragMoveEvent) => {
+    if (event.active.data.current?.type !== 'action-source') return
+    setInsertion(prev => {
+      const next = insertionPointFor(event, steps)
+      if (prev?.index === next?.index && prev?.gap === next?.gap) return prev
+      return next
+    })
+  }
+
+  const handleDragCancel = () => {
+    setActiveAction(null)
+    setInsertion(null)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveAction(null)
+    setInsertion(null)
     const { active, over } = event
 
     if (!over) return
@@ -444,6 +515,11 @@ export default function PipelinesPage() {
     const activeData = active.data.current
 
     if (activeData?.type === 'action-source') {
+      // Recomputed rather than read off state so the drop always lands in the gap the user saw,
+      // even if the pointer never moved far enough to fire a drag-move.
+      const target = insertionPointFor(event, steps)
+      if (!target) return
+
       const action = activeData.action as CustomAction
       const newStep: PipelineStepLocal = {
         instanceId: Math.random().toString(36).slice(2) + Date.now().toString(36),
@@ -452,16 +528,11 @@ export default function PipelinesPage() {
         targetRole: action.targetRole,
       }
 
-      const overIndex = steps.findIndex(s => s.instanceId === over.id)
-      if (overIndex >= 0) {
-        setSteps(prev => {
-          const copy = [...prev]
-          copy.splice(overIndex, 0, newStep)
-          return copy
-        })
-      } else {
-        setSteps(prev => [...prev, newStep])
-      }
+      setSteps(prev => {
+        const copy = [...prev]
+        copy.splice(Math.min(target.index, copy.length), 0, newStep)
+        return copy
+      })
       return
     }
 
@@ -561,7 +632,9 @@ export default function PipelinesPage() {
         sensors={sensors}
         collisionDetection={collisionDetection}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <Box sx={{ display: 'flex', gap: { xs: 2, md: 3 }, flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'flex-start' } }}>
           {/* Left panel — Pipeline */}
@@ -635,13 +708,17 @@ export default function PipelinesPage() {
                   <Typography variant="subtitle2" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.7rem', mb: 1.5 }}>
                     Steps
                   </Typography>
-                  <DroppablePipelineArea>
+                  {/* Padding both keeps shifted cards inside the border and, when the insertion
+                      point is the end of the list, is itself the gap. */}
+                  <DroppablePipelineArea tailSpace={insertion ? insertion.gap : 0}>
                     <SortableContext items={steps.map(s => s.instanceId)} strategy={verticalListSortingStrategy}>
                       {steps.map((step, i) => (
                         <SortableStepCard
                           key={step.instanceId}
                           step={step}
                           index={i}
+                          actionId={actionsByKey.get(step.actionKey)?.id ?? null}
+                          shift={insertion && i >= insertion.index ? insertion.gap : 0}
                           onRemove={() => removeStep(step.instanceId)}
                         />
                       ))}

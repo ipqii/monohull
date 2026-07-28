@@ -84,8 +84,13 @@ drag-and-drop builder:
   image-config actions; an environment-scoped pipeline also sees that
   environment's actions.
 - **Steps** — drag actions from the **Available Actions** panel on the right into
-  the drop area; reorder by dragging; remove with the trash icon. Each step shows
-  its number and target role.
+  the drop area; reorder by dragging; remove with the trash icon. While you drag,
+  the steps below the pointer move down to open a gap where the action will land —
+  hover the top half of a step to go before it, the bottom half to go after.
+  Each step shows its number and target role, and an **↗** button that opens that
+  action's definition in a new tab — so you can read or edit the command without losing the
+  pipeline you're building. The same button is on every card in the Available
+  Actions panel.
 
 **Save** persists it; **Export** downloads a `.pipeline.yaml`; **Delete** removes
 it. A **Form / YAML** toggle lets you author the whole pipeline as text (a list
@@ -94,4 +99,5 @@ of `actionKey`s).
 **Running a pipeline** happens against an environment: on the environment's
 **Pipeline** tab, **Re-run Pipeline** executes the environment's pipeline (its
 template default, or a Configuration-tab override). Steps run sequentially with
-live status.
+live status, and each one carries the same **↗** link to its action definition —
+the quickest route from a failed step to the command that failed.
