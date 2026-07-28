@@ -64,8 +64,10 @@ public class ConfigController {
         entity.setDbVendor(req.dbVendor());
         entity.setDbName(req.dbName());
         entity.setDbContainerPort(req.dbContainerPort());
+        entity.setDbCommand(req.dbCommand());
         entity.setHostVolumePath(req.hostVolumePath());
         entity.setDbVolumeName(req.dbVolumeName());
+        entity.setDbVolumeTarget(req.dbVolumeTarget());
         entity.setWorkspacePath(req.workspacePath());
         entity.setAppHttpPort(req.appHttpPort());
         entity.setAppHttpsPort(req.appHttpsPort());
@@ -99,8 +101,10 @@ public class ConfigController {
         entity.setDbVendor(req.dbVendor());
         entity.setDbName(req.dbName());
         entity.setDbContainerPort(req.dbContainerPort());
+        entity.setDbCommand(req.dbCommand());
         entity.setHostVolumePath(req.hostVolumePath());
         entity.setDbVolumeName(req.dbVolumeName());
+        entity.setDbVolumeTarget(req.dbVolumeTarget());
         entity.setWorkspacePath(req.workspacePath());
         entity.setAppHttpPort(req.appHttpPort());
         entity.setAppHttpsPort(req.appHttpsPort());
@@ -189,6 +193,7 @@ public class ConfigController {
         config.setAppHttpsPort(req.appHttpsPort());
         config.setDbPort(req.dbPort());
         config.setDbPassword(req.dbPassword());
+        config.setDbCommand(req.dbCommand());
         config.setDbExtraEnv(req.dbExtraEnv());
         config.setDbExtraBinds(req.dbExtraBinds());
         config.setAppExtraEnv(req.appExtraEnv());
@@ -204,8 +209,8 @@ public class ConfigController {
         PipelineDefinitionEntity pipeline = e.getPipelineDefinition();
         return new ImageConfigResponse(e.getId(), e.getClient(), e.getProject(),
             e.getMaximoVersion(), e.getAppImage(), e.getDbImage(), e.getAdmImage(),
-            e.getDbVendor(), e.getDbName(), e.getDbContainerPort(),
-            e.getHostVolumePath(), e.getDbVolumeName(),
+            e.getDbVendor(), e.getDbName(), e.getDbContainerPort(), e.getDbCommand(),
+            e.getHostVolumePath(), e.getDbVolumeName(), e.getDbVolumeTarget(),
             e.getWorkspacePath(),
             e.getAppHttpPort(), e.getAppHttpsPort(), e.getDbPort(),
             e.getMockHostPort(), e.getSmtpHostPort(), e.getSmtpUiHostPort(),
@@ -229,7 +234,7 @@ public class ConfigController {
             config.getId(), config.getHostVolumePath(),
             config.getDbVolumeName(), config.isStaticPorts(),
             config.getAppHttpPort(), config.getAppHttpsPort(), config.getDbPort(),
-            config.getDbPassword(),
+            config.getDbPassword(), config.getDbCommand(),
             config.getDbExtraEnv(), config.getDbExtraBinds(),
             config.getAppExtraEnv(), config.getAppExtraBinds(),
             config.getAdmExtraEnv(), config.getAdmExtraBinds(),

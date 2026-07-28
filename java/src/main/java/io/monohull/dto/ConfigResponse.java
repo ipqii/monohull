@@ -11,6 +11,7 @@ public record ConfigResponse(
     Integer appHttpsPort,
     Integer dbPort,
     String dbPassword,
+    String dbCommand,
     List<ExtraEnvVar> dbExtraEnv,
     List<ExtraBind> dbExtraBinds,
     List<ExtraEnvVar> appExtraEnv,

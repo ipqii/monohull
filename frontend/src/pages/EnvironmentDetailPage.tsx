@@ -16,7 +16,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopyRounded'
 import VisibilityIcon from '@mui/icons-material/VisibilityRounded'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOffRounded'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import {
   getEnvironment, stopEnvironment, startEnvironment, deleteEnvironment,
   restartContainer, stopContainer, startContainer,
@@ -33,6 +33,7 @@ import ContainerActions from '../components/ContainerActions'
 import LogViewer from '../components/LogViewer'
 import ContainerLogsDialog from '../components/ContainerLogsDialog'
 import ContainerExtrasEditor from '../components/ContainerExtrasEditor'
+import ActionDefinitionLink from '../components/ActionDefinitionLink'
 import { ExtraBind, ExtraEnvVar } from '../api/client'
 import { useLogStream } from '../hooks/useLogStream'
 
@@ -573,11 +574,17 @@ export default function EnvironmentDetailPage() {
     enabled: tab === 0 || tab === 3,
   })
 
+  // Also loaded for the Pipeline tab, which maps each step's action key back to a definition id.
   const { data: actions = [] } = useQuery({
     queryKey: ['actions', envId],
     queryFn: () => getActions(envId),
-    enabled: tab === 0,
+    enabled: tab === 0 || tab === 1,
   })
+
+  const actionIdByKey = useMemo(
+    () => new Map(actions.map(a => [a.id, a.customActionId])),
+    [actions],
+  )
 
   const { data: actionHistory = [] } = useQuery({
     queryKey: ['actionHistory', envId],
@@ -972,6 +979,7 @@ export default function EnvironmentDetailPage() {
                             exit: {step.exitCode}
                           </Typography>
                         )}
+                        <ActionDefinitionLink actionId={actionIdByKey.get(step.actionId) ?? null} />
                       </Box>
                     </StepLabel>
                     <StepContent>
@@ -1074,6 +1082,14 @@ export default function EnvironmentDetailPage() {
                 helperText="Passed to the DB container as MAXIMO_DB_PASSWORD. Used by in-container scripts (e.g. database restore) that need to authenticate to Maximo."
                 fullWidth size="small"
                 autoComplete="new-password"
+              />
+              <TextField
+                label="DB Command"
+                defaultValue={config.dbCommand || ''}
+                onBlur={e => configMutation.mutate({ ...config, dbCommand: e.target.value || null })}
+                helperText="Argument list passed to the DB image's entrypoint (e.g. restore). Inherited from the image config; applies on the next rebuild."
+                fullWidth size="small"
+                InputProps={{ sx: { fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8rem' } }}
               />
 
               <FormControl fullWidth size="small">

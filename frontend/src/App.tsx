@@ -11,8 +11,8 @@ import BoltIcon from '@mui/icons-material/BoltRounded'
 import AccountTreeIcon from '@mui/icons-material/AccountTreeRounded'
 import VpnKeyIcon from '@mui/icons-material/VpnKeyRounded'
 import CodeIcon from '@mui/icons-material/CodeRounded'
-import RocketLaunchIcon from '@mui/icons-material/RocketLaunchRounded'
 import LogoutIcon from '@mui/icons-material/LogoutRounded'
+import MonohullMark from './components/MonohullMark'
 import MenuIcon from '@mui/icons-material/MenuRounded'
 import DashboardPage from './pages/DashboardPage'
 import EnvironmentDetailPage from './pages/EnvironmentDetailPage'
@@ -54,7 +54,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
             }}
           >
-            <RocketLaunchIcon sx={{ color: '#fff', fontSize: 20 }} />
+            <MonohullMark size={22} color="#fff" />
           </Box>
           <Box>
             <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2, letterSpacing: '-0.02em' }}>
@@ -215,7 +215,7 @@ function MainLayout() {
               <MenuIcon />
             </IconButton>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <RocketLaunchIcon sx={{ color: '#6366f1', fontSize: 20 }} />
+              <MonohullMark size={22} color="#6366f1" />
               <Typography variant="h6" fontWeight={700} sx={{ fontSize: '1rem' }}>Monohull</Typography>
             </Box>
           </Toolbar>

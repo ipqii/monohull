@@ -74,6 +74,52 @@ monohull:
       workingDir: /opt/IBM/SMP/maximo/tools/maximo
       timeout: 1800
       autoRun: true
+    # Maximo ships two sets of web deployment descriptors: web.xml, which declares
+    # security-constraints on /ui/* and /oslc/* requiring the 'maximouser' role with
+    # BASIC auth, and web-dev.xml, which declares none and leaves authentication to
+    # Maximo itself. maximo-all.xml is supposed to pick between them, but the ant
+    # targets that do it (set-web-xml / set-rename-web-xml) are commented out in the
+    # vanilla file, so build-ear always bakes in the app-server-security variant.
+    #
+    # The result is that Liberty intercepts /maximo/ui/* before Maximo runs and
+    # answers with a browser BASIC prompt instead of Maximo's own login page — and
+    # since swap-server-xml-to-dev leaves no user registry and 'maximouser' unbound,
+    # no credentials can ever satisfy it. The same constraint is why /oslc/* returns
+    # 401 at the gate; mxe.int.enableosauth (see mas-fix-post-updatedb) is a Maximo
+    # property and cannot switch off a Liberty constraint.
+    #
+    # This is the descriptor counterpart to swap-server-xml-to-dev, but it has to run
+    # BEFORE build-ear because these files are compiled into the EAR.
+    - id: swap-web-xml-to-dev
+      name: Swap web.xml to dev variant
+      description: Use the dev web deployment descriptors so Liberty leaves authentication to Maximo instead of answering with a browser BASIC prompt.
+      targetRole: ADM
+      command: |
+        set -eo pipefail
+        DD=/opt/IBM/SMP/maximo/deployment/was-liberty-default/config-deployment-descriptors/maximo-all
+        test -d "$DD" || { echo "[swap-web-xml] Descriptor dir not found: $DD" >&2; exit 1; }
+        swapped=0
+        for dev in $(find "$DD" -name web-dev.xml | sort); do
+          dir=$(dirname "$dev")
+          prod="$dir/web.xml"
+          mod=$(printf '%s' "${dir#$DD/}" | cut -d/ -f1)
+          if [ ! -f "$prod" ]; then
+            echo "[swap-web-xml] $mod: web-dev.xml with no web.xml beside it; skipping"
+            continue
+          fi
+          # Keep the original exactly once, so re-running the pipeline doesn't
+          # overwrite the backup with an already-swapped copy.
+          [ -f "$prod.appserversecurity" ] || cp -p "$prod" "$prod.appserversecurity"
+          cp -p "$dev" "$prod"
+          cmp -s "$dev" "$prod" || { echo "[swap-web-xml] $mod: copy did not take" >&2; exit 1; }
+          echo "[swap-web-xml] $mod: now using web-dev.xml ($(grep -c '<security-constraint>' "$prod") security-constraint entries, was $(grep -c '<security-constraint>' "$prod.appserversecurity"))"
+          swapped=$((swapped + 1))
+        done
+        test "$swapped" -gt 0 || { echo "[swap-web-xml] No web-dev.xml found under $DD" >&2; exit 1; }
+        echo "[swap-web-xml] Swapped $swapped module(s); originals kept as web.xml.appserversecurity"
+      timeout: 120
+      afterAction: run-updatedb-preprocessor
+      autoRun: true
     # Vanilla maximo-all.xml wipes deployment/maximo-all/ as its first step,
     # which fails when that path is a bind mount. We redirect ant's output to
     # /tmp and tar it into the bind-mounted Liberty config dir afterwards;
@@ -106,7 +152,7 @@ monohull:
         echo "[build-ear] Liberty bundle deployed to $DEST"
       workingDir: /opt/IBM/SMP/maximo/deployment/was-liberty-default
       timeout: 600
-      afterAction: run-updatedb-preprocessor
+      afterAction: swap-web-xml-to-dev
       autoRun: true
       # Stream the full output into the live build log. An earlier config suppressed it
       # (verbose: true), but that flag never took effect until the seeding prefix was

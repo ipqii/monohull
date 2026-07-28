@@ -4,6 +4,52 @@ All notable changes to Monohull are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and Monohull uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- New brand mark: a heeling sailboat replaces the rocket across the app icon, favicon,
+  PWA icons, sidebar, mobile app bar, and login card. Source artwork lives in
+  `docs/brand/`; every PNG derivative is generated from `frontend/public/monohull-icon.svg`.
+
+### Added
+- The pipeline builder shows where a dragged action will land: the steps below the
+  pointer move down to open a gap, and hovering the top or bottom half of a step
+  puts the new action before or after it. Previously the list didn't react at all
+  until the drop.
+- Jump from an action in a pipeline straight to its definition. Pipeline steps —
+  in the builder, in the Available Actions palette, and on an environment's
+  Pipeline tab — carry a link to the action editor, which is the shortest route
+  from a failed step to the command that failed. It opens in a new tab, so an
+  unsaved pipeline survives the detour.
+- **Swap web.xml to dev variant** pipeline action, sequenced before Build EAR. Maximo
+  ships two sets of web deployment descriptors and the ant targets that choose between
+  them are commented out in the vanilla `maximo-all.xml`, so the EAR was always built
+  with security-constraints on `/ui/*` and `/oslc/*` under BASIC auth. Liberty answered
+  those before Maximo ran, giving a browser credential popup instead of Maximo's login
+  page — and, with no user registry in the dev `server.xml`, no credentials could
+  satisfy it. This is the deployment-descriptor counterpart to the existing
+  *Swap server.xml to dev variant*.
+- **DB Command** on image templates and per-environment config: the argument list
+  handed to the DB image's entrypoint. Database images that restore a backup only
+  when passed an argument (e.g. `restore`) previously had no way to receive one
+  from Monohull, so they silently came up with an empty database.
+- The database is now checked for a Maximo schema as soon as it reports ready, and
+  the build fails there — naming DB Command when the image's own startup log shows
+  it took no restore branch — instead of surfacing several pipeline actions later
+  as a bare vendor error. Set `monohull.build.verify-db-schema=false` when a
+  pipeline action is what creates the schema.
+- The same check now also confirms the database is listening on **DB Container
+  Port** before the pipeline runs. DB-role actions use the local command-line
+  processor over IPC and pass regardless, so a wrong port previously surfaced as a
+  `Connection refused` stack trace from UpdateDB several steps later. On DB2 the
+  failure reports the port the image is really on, resolved through `SVCENAME`.
+- **DB Volume Target** on image templates: where the database volume is mounted
+  inside the DB container. It was hardcoded to `/database` (DB2) and `/opt/oracle`
+  (Oracle), which silently persists nothing when an image keeps its data elsewhere
+  — the database ends up in the container's writable layer and is lost whenever the
+  container is recreated. Blank keeps the previous defaults, and the build log now
+  says which default it used.
+
 ## [1.0.0] — 2026-07-24
 
 First public release.

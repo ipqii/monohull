@@ -25,6 +25,9 @@ public record BuildRequest(
   String appConfigHostPath, // e.g., /host/.../config
   String workspaceHostPath, // e.g., /workspace
   String logsHostPath, // e.g., /logs
-  String dbVolumeName // named volume for DB
+  String dbVolumeName, // named volume for DB
+
+  // Command (argv) for the DB container's entrypoint; null => the image's own CMD.
+  String dbCommand
 
 ) {}

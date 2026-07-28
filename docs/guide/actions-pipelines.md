@@ -20,6 +20,7 @@ These implement the standard Maximo build/configure sequence. In order, they are
 | **Run UpdateDB Pre-Processor** | ADM | Runs Maximo's UpdateDB pre-processor. |
 | **Build EAR** | ADM | Builds the Maximo EAR + Liberty bundle and publishes it to the bind-mounted config dir. |
 | **Run Maximo UpdateDB** | ADM | Runs UpdateDB (can take 30–60+ min on industry solutions). |
+| **Swap web.xml to dev variant** | ADM | Uses Maximo's `web-dev.xml` deployment descriptors so Liberty leaves authentication to Maximo. Without it the EAR carries security-constraints on `/ui/*` and `/oslc/*` with BASIC auth, and the browser shows its own credential prompt instead of Maximo's login page. Runs before **Build EAR**, since the descriptors are compiled into the EAR. |
 | **MAS pre-updatedb DB fixes** | DB | Clears stale `userdefined` flags that would otherwise break UpdateDB on a vanilla Service Provider DB. |
 | **MAS post-updatedb DB fixes** | DB | SQL fixes so the restored DB accepts MAXADMIN auth and OSLC calls. |
 | **Set MAXADMIN password** | ADM | Encrypts `maxadmin` with Maximo's cipher and writes it to `MAXUSER` so basic-auth logins work. |
@@ -83,8 +84,13 @@ drag-and-drop builder:
   image-config actions; an environment-scoped pipeline also sees that
   environment's actions.
 - **Steps** — drag actions from the **Available Actions** panel on the right into
-  the drop area; reorder by dragging; remove with the trash icon. Each step shows
-  its number and target role.
+  the drop area; reorder by dragging; remove with the trash icon. While you drag,
+  the steps below the pointer move down to open a gap where the action will land —
+  hover the top half of a step to go before it, the bottom half to go after.
+  Each step shows its number and target role, and an **↗** button that opens that
+  action's definition in a new tab — so you can read or edit the command without losing the
+  pipeline you're building. The same button is on every card in the Available
+  Actions panel.
 
 **Save** persists it; **Export** downloads a `.pipeline.yaml`; **Delete** removes
 it. A **Form / YAML** toggle lets you author the whole pipeline as text (a list
@@ -93,4 +99,5 @@ of `actionKey`s).
 **Running a pipeline** happens against an environment: on the environment's
 **Pipeline** tab, **Re-run Pipeline** executes the environment's pipeline (its
 template default, or a Configuration-tab override). Steps run sequentially with
-live status.
+live status, and each one carries the same **↗** link to its action definition —
+the quickest route from a failed step to the command that failed.

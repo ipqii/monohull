@@ -4,6 +4,49 @@
 build output, and the **Pipeline** tab to see which step failed and its exit code.
 Fix the cause (bad image tag, DB issue, etc.) and use **Re-run Pipeline**.
 
+**The build stops with "has no Maximo schema".** The DB container started and
+reported ready, but its database is empty, so Monohull stopped before any pipeline
+action could fail against it. The usual cause is a DB image that restores a backup
+only when its entrypoint is given an argument, with no
+[**DB Command**](templates-profiles.md#db-command) set — the build log's `[hint]`
+lines say so when the image's own startup output shows it. Set DB Command on the
+template (or the environment's **Configuration** tab), remove the environment's DB
+volume so the entrypoint re-runs its restore, and rebuild. If your schema is meant
+to be created by a pipeline action instead, set
+`monohull.build.verify-db-schema=false`.
+
+**A DB action fails with `SQL0204N ... is an undefined name` (DB2 exit 4).** Same
+root cause as above on an environment built before that check existed: the table
+the action wants isn't there because the database was never populated.
+
+**The build stops with "Nothing is listening on port N".** The database is up but
+not on the port
+[**DB Container Port**](templates-profiles.md#environments-image-templates) says.
+On DB2 the build log's `[hint]` line reports the port the image is really on —
+set DB Container Port to that and rebuild. DB2 resolves its port through a
+service name, so you can confirm it yourself with
+`docker exec <env>-db grep db2c /etc/services`.
+
+**UpdateDB fails with `Connection refused` / `ERRORCODE=-4499`.** Same cause, on
+an environment built before that check existed. Note that DB-role actions can
+still pass while this is broken — they use the local command-line processor over
+IPC, while UpdateDB connects over TCP from the ADM container.
+
+**A rebuild re-restores a database that was already restored.** The database
+volume isn't mounted where the image keeps its data, so it persists nothing. See
+[DB Volume Target](templates-profiles.md#db-volume-target).
+
+**Maximo shows a browser credential popup instead of its own login page.** The EAR
+was built with Maximo's app-server-security deployment descriptors, so Liberty
+enforces a security-constraint on `/ui/*` with BASIC auth and answers before
+Maximo ever runs. No credentials will work either — the dev `server.xml` defines
+no user registry, so the role `maximouser` is unbound and the realm shows as
+`defaultRealm` rather than `MAXIMO Web Application Realm`. The **Swap web.xml to
+dev variant** action fixes this, but it has to run *before* **Build EAR**;
+re-running the pipeline is enough. The same constraint is why `/maximo/oslc/*`
+returns 401 — `mxe.int.enableosauth` is a Maximo property and cannot switch off a
+Liberty constraint.
+
 **The environment is RUNNING but Maximo won't load.** The app server can take
 several minutes to bind its ports after the containers start. Give it time, then
 check the APP container's **Logs**. A **Restart WebSphere** action or a container

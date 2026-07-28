@@ -50,8 +50,11 @@ function configToForm(config: ImageConfig): ImageConfigRequest {
     appImage: config.appImage, dbImage: config.dbImage, admImage: config.admImage,
     dbVendor: config.dbVendor, dbName: config.dbName || undefined,
     dbContainerPort: config.dbContainerPort ?? undefined,
+    dbCommand: config.dbCommand || undefined,
     hostVolumePath: config.hostVolumePath || undefined,
-    dbVolumeName: config.dbVolumeName || undefined, workspacePath: config.workspacePath || undefined,
+    dbVolumeName: config.dbVolumeName || undefined,
+    dbVolumeTarget: config.dbVolumeTarget || undefined,
+    workspacePath: config.workspacePath || undefined,
     appHttpPort: config.appHttpPort,
     appHttpsPort: config.appHttpsPort,
     dbPort: config.dbPort,
@@ -329,6 +332,10 @@ export default function EnvironmentConfigEditPage() {
                     placeholder="50000 / 1521"
                     helperText="Internal listener port for inter-container JDBC. Defaults: 50000 (DB2) / 1521 (Oracle)." />
                 </Box>
+                <TextField label="DB Command" value={form.dbCommand || ''} size="small"
+                  onChange={e => setForm({ ...form, dbCommand: e.target.value || undefined })} fullWidth
+                  placeholder="e.g. restore" InputProps={monoInput}
+                  helperText="Argument list passed to the DB image's entrypoint. Some images branch on it to decide whether to restore a database backup — leaving it blank means an empty database. Leave blank for images that ship the database baked in." />
               </Section>
 
               <Section id="storage" title="Storage & Paths">
@@ -339,6 +346,10 @@ export default function EnvironmentConfigEditPage() {
                   <TextField label="DB Volume Name" value={form.dbVolumeName || ''} size="small"
                     onChange={e => setForm({ ...form, dbVolumeName: e.target.value || undefined })} fullWidth />
                 </Box>
+                <TextField label="DB Volume Target" value={form.dbVolumeTarget || ''} size="small"
+                  onChange={e => setForm({ ...form, dbVolumeTarget: e.target.value || undefined })} fullWidth
+                  placeholder="/database" InputProps={monoInput}
+                  helperText="Where the database volume is mounted inside the DB container. Must be the path the image actually writes its data to, or the volume persists nothing and the database is lost when the container is recreated. Blank uses /database (DB2) or /opt/oracle (Oracle)." />
                 <TextField label="Workspace Path" value={form.workspacePath || ''} size="small"
                   onChange={e => setForm({ ...form, workspacePath: e.target.value || undefined })} fullWidth
                   placeholder="e.g. /git/repo/LOAMIS" InputProps={monoInput}

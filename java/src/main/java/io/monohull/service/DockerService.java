@@ -127,9 +127,19 @@ public class DockerService {
         }
     }
 
+    /**
+     * Create + start the database container.
+     *
+     * <p>{@code command} is the argv handed to the image's entrypoint. Several Maximo DB
+     * images branch on their first argument to decide whether to restore a backup or leave
+     * the freshly created empty database in place — without it they quietly produce an empty
+     * DB and the failure only surfaces much later, as a Maximo table that doesn't exist.
+     * Blank leaves the container's command unset so the image's own CMD applies, which is
+     * the right thing for images that ship the database baked in.
+     */
     public String runDbContainer(String name, String image, String network, int hostPort, int containerPort,
                                  String volumeName, String volumeTarget, List<String> env,
-                                 List<Bind> extraBinds,
+                                 List<Bind> extraBinds, String command,
                                  String networkAlias, Consumer<String> logger) {
         java.util.List<Bind> allBinds = new java.util.ArrayList<>();
         allBinds.add(new Bind(volumeName, new Volume(volumeTarget)));
@@ -141,25 +151,66 @@ public class DockerService {
             .withPrivileged(true)
             .withNetworkMode(network);
 
+        List<String> cmd = splitCommand(command);
+
         logger.accept("[docker] " + formatDockerRunCommand(
             name, image, network, networkAlias,
             List.of(hostPort + ":" + containerPort),
             allBinds, env, Map.of(MANAGED_LABEL, "true"),
-            null, null, true, null));
+            null, null, true, cmd));
 
         replaceLeftover(name, logger);
-        CreateContainerResponse res = docker.createContainerCmd(image)
+        var cmdBuilder = docker.createContainerCmd(image)
             .withName(name)
             .withEnv(env)
             .withExposedPorts(ExposedPort.tcp(containerPort))
             .withHostConfig(host)
             .withLabels(Map.of(MANAGED_LABEL, "true"))
-            .withAliases(networkAlias)
-            .exec();
+            .withAliases(networkAlias);
+        if (cmd != null) {
+            cmdBuilder.withCmd(cmd.toArray(new String[0]));
+        }
+        CreateContainerResponse res = cmdBuilder.exec();
 
         startOrRemove(res.getId(), name);
         logger.accept("Started DB container: " + name);
         return res.getId();
+    }
+
+    /**
+     * Split a user-entered command line into argv, honouring single and double quotes so
+     * arguments with spaces survive (e.g. {@code restore --file "my backup.tar.gz"}). This
+     * is deliberately not a shell: there is no expansion, globbing, or escaping beyond
+     * quote grouping, because the string is passed straight to the container's entrypoint
+     * rather than through a shell. Returns null for null/blank input, meaning "no command".
+     */
+    static List<String> splitCommand(String command) {
+        if (command == null || command.isBlank()) return null;
+        List<String> args = new java.util.ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inArg = false;
+        char quote = 0;
+        for (int i = 0; i < command.length(); i++) {
+            char ch = command.charAt(i);
+            if (quote != 0) {
+                if (ch == quote) quote = 0;
+                else current.append(ch);
+            } else if (ch == '\'' || ch == '"') {
+                quote = ch;
+                inArg = true;
+            } else if (Character.isWhitespace(ch)) {
+                if (inArg) {
+                    args.add(current.toString());
+                    current.setLength(0);
+                    inArg = false;
+                }
+            } else {
+                current.append(ch);
+                inArg = true;
+            }
+        }
+        if (inArg) args.add(current.toString());
+        return args.isEmpty() ? null : args;
     }
 
     /**
