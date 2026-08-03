@@ -123,6 +123,7 @@ The UI uses MUI v5 with a heavily customized dark theme defined in `frontend/src
 | GET | `/api/environments/{id}/logs` | SSE live log stream |
 | GET | `/api/environments/{id}/logs/history` | Historical logs (JSON) |
 | GET | `/api/containers/{id}/status` | Live Docker inspect |
+| WS | `/api/containers/{id}/terminal` | Interactive shell (websocket ↔ docker exec PTY) |
 | POST | `/api/containers/{id}/restart` | Restart container |
 | POST | `/api/containers/{id}/stop` | Stop container |
 | POST | `/api/containers/{id}/start` | Start container |

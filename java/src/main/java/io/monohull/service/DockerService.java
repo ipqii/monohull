@@ -597,6 +597,149 @@ public class DockerService {
         return exitCodeLong != null ? exitCodeLong.intValue() : -1;
     }
 
+    /**
+     * Start an interactive shell inside a running container ({@code docker exec -it}
+     * equivalent) and return a handle for the browser-terminal bridge. Output bytes are
+     * pushed to {@code onOutput} from the docker transport thread; {@code onClosed} fires
+     * once when the shell exits or the connection drops. Prefers bash, falls back to sh
+     * so slim images (busybox/mailpit) still get a working prompt.
+     */
+    public TerminalSession startTerminal(String containerId, Consumer<byte[]> onOutput, Runnable onClosed) {
+        ExecCreateCmdResponse exec = docker.execCreateCmd(containerId)
+            .withAttachStdin(true)
+            .withAttachStdout(true)
+            .withAttachStderr(true)
+            .withTty(true)
+            .withEnv(List.of("TERM=xterm-256color"))
+            .withCmd("/bin/sh", "-c", "[ -x /bin/bash ] && exec /bin/bash; exec /bin/sh")
+            .exec();
+
+        QueueInputStream stdin = new QueueInputStream();
+        var callback = new ResultCallback.Adapter<Frame>() {
+            @Override
+            public void onNext(Frame frame) {
+                onOutput.accept(frame.getPayload());
+            }
+
+            @Override
+            public void onComplete() {
+                super.onComplete();
+                onClosed.run();
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                super.onError(throwable);
+                onClosed.run();
+            }
+        };
+        docker.execStartCmd(exec.getId())
+            .withStdIn(stdin)
+            .withTty(true)
+            .exec(callback);
+        return new TerminalSession(exec.getId(), stdin, callback);
+    }
+
+    /** Propagate an xterm resize to the PTY so full-screen tools (vi, top) render correctly.
+     *  Best-effort: a failed resize should never kill the terminal itself. */
+    public void resizeTerminal(String execId, int rows, int cols) {
+        try {
+            docker.resizeExecCmd(execId).withSize(rows, cols).exec();
+        } catch (RuntimeException e) {
+            log.debug("Resize of exec {} to {}x{} failed: {}", execId, cols, rows, e.getMessage());
+        }
+    }
+
+    /** Live handle for one interactive terminal exec: write() feeds the shell's stdin,
+     *  close() tears down stdin and the hijacked connection (the shell then sees EOF/HUP). */
+    public static final class TerminalSession implements java.io.Closeable {
+        private final String execId;
+        private final QueueInputStream stdin;
+        private final ResultCallback.Adapter<Frame> callback;
+
+        TerminalSession(String execId, QueueInputStream stdin, ResultCallback.Adapter<Frame> callback) {
+            this.execId = execId;
+            this.stdin = stdin;
+            this.callback = callback;
+        }
+
+        public String execId() {
+            return execId;
+        }
+
+        public void write(byte[] data) {
+            stdin.put(data);
+        }
+
+        @Override
+        public void close() {
+            stdin.close();
+            try {
+                callback.close();
+            } catch (java.io.IOException e) {
+                log.debug("Closing terminal exec {} raised: {}", execId, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Stdin bridge fed from websocket threads and drained by the docker transport thread.
+     * Deliberately not a {@link java.io.PipedInputStream}: piped streams throw "write end
+     * dead" when the last writing thread terminates, and websocket writes hop across the
+     * servlet pool's threads.
+     */
+    static final class QueueInputStream extends java.io.InputStream {
+        private static final byte[] EOF = new byte[0];
+        private final java.util.concurrent.BlockingQueue<byte[]> queue =
+            new java.util.concurrent.LinkedBlockingQueue<>();
+        private byte[] current;
+        private int pos;
+        private volatile boolean closed;
+
+        void put(byte[] data) {
+            if (!closed && data != null && data.length > 0) {
+                queue.add(data);
+            }
+        }
+
+        @Override
+        public int read() {
+            byte[] one = new byte[1];
+            int n = read(one, 0, 1);
+            return n < 0 ? -1 : one[0] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            if (len == 0) return 0;
+            while (current == null || pos >= current.length) {
+                if (closed && queue.isEmpty()) return -1;
+                try {
+                    current = queue.take();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return -1;
+                }
+                if (current == EOF) {
+                    closed = true;
+                    current = null;
+                    return -1;
+                }
+                pos = 0;
+            }
+            int n = Math.min(len, current.length - pos);
+            System.arraycopy(current, pos, b, off, n);
+            pos += n;
+            return n;
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+            queue.add(EOF);
+        }
+    }
+
     public void removeIfExists(String name) {
         try {
             docker.removeContainerCmd(name).withForce(true).exec();

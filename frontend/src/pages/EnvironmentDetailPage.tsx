@@ -32,6 +32,7 @@ import ContainerStatusBadge from '../components/ContainerStatusBadge'
 import ContainerActions from '../components/ContainerActions'
 import LogViewer from '../components/LogViewer'
 import ContainerLogsDialog from '../components/ContainerLogsDialog'
+import ContainerTerminalDialog from '../components/ContainerTerminalDialog'
 import ContainerExtrasEditor from '../components/ContainerExtrasEditor'
 import ActionDefinitionLink from '../components/ActionDefinitionLink'
 import { ExtraBind, ExtraEnvVar } from '../api/client'
@@ -515,6 +516,7 @@ export default function EnvironmentDetailPage() {
   const [tab, setTab] = useState(0)
   const [expandedExecId, setExpandedExecId] = useState<string | null>(null)
   const [logsContainer, setLogsContainer] = useState<{ id: number; name: string } | null>(null)
+  const [terminalContainer, setTerminalContainer] = useState<{ id: number; name: string } | null>(null)
 
   const { data: env, isLoading, error } = useQuery({
     queryKey: ['environment', envId],
@@ -897,6 +899,18 @@ export default function EnvironmentDetailPage() {
                     >
                       Logs
                     </Button>
+                    <Tooltip title={running ? '' : 'Container must be running'} placement="top">
+                      <span>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!running}
+                          onClick={() => setTerminalContainer({ id: c.id, name: c.containerName })}
+                        >
+                          Terminal
+                        </Button>
+                      </span>
+                    </Tooltip>
                   </CardActions>
                 </Card>
               </Grid>
@@ -1186,6 +1200,12 @@ export default function EnvironmentDetailPage() {
         onClose={() => setLogsContainer(null)}
         containerId={logsContainer?.id ?? null}
         containerName={logsContainer?.name ?? ''}
+      />
+      <ContainerTerminalDialog
+        open={terminalContainer !== null}
+        onClose={() => setTerminalContainer(null)}
+        containerId={terminalContainer?.id ?? null}
+        containerName={terminalContainer?.name ?? ''}
       />
     </>
   )

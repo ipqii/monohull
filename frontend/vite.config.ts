@@ -58,7 +58,14 @@ export default defineConfig({
     port: 3000,
     allowedHosts: true,
     proxy: {
-      '/api': 'http://localhost:8080'
+      // ws: the container-terminal endpoint upgrades to a websocket. The backend only
+      // accepts same-origin handshakes (the terminal is auth'd by session cookie), so
+      // rewrite Origin to match the proxy target in dev.
+      '/api': {
+        target: 'http://localhost:8080',
+        ws: true,
+        headers: { Origin: 'http://localhost:8080' },
+      }
     }
   },
   build: {

@@ -12,6 +12,11 @@ All notable changes to Monohull are documented here. The format follows
   `docs/brand/`; every PNG derivative is generated from `frontend/public/monohull-icon.svg`.
 
 ### Added
+- **Terminal** button on every container card: an interactive shell (xterm.js in the
+  browser, bridged over a websocket to `docker exec` with a real PTY) straight into the
+  DB, APP, ADM, or addon container — no SSH to the docker host needed. Prefers bash and
+  falls back to sh for slim images, resizes with the window, and requires the same
+  login session as the rest of the API.
 - The pipeline builder shows where a dragged action will land: the steps below the
   pointer move down to open a gap. Hovering a step inserts before it and the space
   below the list adds to the end, so the list moves exactly once per step the
