@@ -85,8 +85,9 @@ drag-and-drop builder:
   environment's actions.
 - **Steps** — drag actions from the **Available Actions** panel on the right into
   the drop area; reorder by dragging; remove with the trash icon. While you drag,
-  the steps below the pointer move down to open a gap where the action will land —
-  hover the top half of a step to go before it, the bottom half to go after.
+  the steps below the pointer move down to open a gap where the action will land:
+  hover a step to insert before it, or the space kept open below the list to add to
+  the end.
   Each step shows its number and target role, and an **↗** button that opens that
   action's definition in a new tab — so you can read or edit the command without losing the
   pipeline you're building. The same button is on every card in the Available
