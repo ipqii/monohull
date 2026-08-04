@@ -4,7 +4,7 @@ All notable changes to Monohull are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and Monohull uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.2] — 2026-08-04
 
 ### Fixed
 - The container terminal never connected in browsers whose Content-Security-Policy
@@ -92,5 +92,6 @@ First public release.
   plain-English cause+fix messages for the common Docker/registry/in-container
   failure modes.
 
+[1.0.2]: https://github.com/ipqii/monohull/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ipqii/monohull/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ipqii/monohull/releases/tag/v1.0.0
