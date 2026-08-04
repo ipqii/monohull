@@ -199,6 +199,15 @@ the host and DNS/TLS for the wildcard domain. Leave `MONOHULL_MAXIMO_DOMAIN` emp
 a LAN-only install, where environments are reached directly on their published
 host ports.
 
+**Keep Traefik new enough for your Docker daemon.** Docker Engine 29 raised the
+daemon's minimum API version to 1.40; Traefik v3.0 and older (and all v2.x) pin
+Docker API 1.24, so a routine Docker upgrade kills their container discovery —
+every environment link goes dead *silently from Monohull's point of view*, while
+the Traefik log fills with `client version 1.24 is too old`. Use a Traefik
+release that negotiates the API version with the daemon (v3.1+; verified with
+`traefik:v3.6` against Docker 29). See
+[issue #3](https://github.com/ipqii/monohull/issues/3).
+
 ---
 
 ## Verifying the install
