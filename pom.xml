@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.monohull</groupId>
 	<artifactId>monohull</artifactId>
-	<version>1.0.0</version>
+	<version>1.0.1</version>
 	<name>Monohull</name>
 	<description>Automated development environments for IBM Maximo® Application Suite — one environment, ready to sail</description>
 
