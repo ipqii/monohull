@@ -4,6 +4,21 @@ All notable changes to Monohull are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and Monohull uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- The per-environment `config/` and `logs/` host directories are now created on the
+  **docker host** (via a short-lived helper container, like teardown already did)
+  instead of inside Monohull's own container, where the chmod never reached the real
+  filesystem. Docker then auto-created the real directory as `root:755`, and Build EAR
+  failed at its final tar step with `Permission denied` for every deployment that
+  doesn't happen to bind-mount the host volume path into Monohull at the same path.
+- Page loads are now network-first instead of PWA-precache-first. The precached shell
+  carries the response headers of the release it was cached from — including the
+  Content-Security-Policy — so after an upgrade the previous release's CSP kept being
+  enforced until the service worker updated, which kept the container terminal blocked
+  even on a fixed server. The cached shell is now only an offline fallback.
+
 ## [1.0.2] — 2026-08-04
 
 ### Fixed
