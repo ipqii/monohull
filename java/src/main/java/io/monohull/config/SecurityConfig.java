@@ -84,22 +84,41 @@ public class SecurityConfig {
                     .requestMatcher(AnyRequestMatcher.INSTANCE)
                     .maxAgeInSeconds(31536000)
                     .includeSubDomains(true))
-                // 'unsafe-inline' styles: Emotion (MUI) injects style elements at runtime.
-                .contentSecurityPolicy(csp -> csp.policyDirectives(
-                    "default-src 'self'; "
-                        + "script-src 'self'; "
-                        + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-                        + "font-src 'self' https://fonts.gstatic.com; "
-                        + "img-src 'self' data:; "
-                        + "connect-src 'self'; "
-                        + "object-src 'none'; "
-                        + "frame-ancestors 'none'; "
-                        + "base-uri 'self'; "
-                        + "form-action 'self'"))
+                .addHeaderWriter(SecurityConfig::writeContentSecurityPolicy)
                 .referrerPolicy(rp -> rp.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                 .permissionsPolicy(pp -> pp.policy("camera=(), microphone=(), geolocation=()")));
 
         return http.build();
+    }
+
+    /** Hostnames/IPs (with optional port, incl. bracketed IPv6) safe to reflect into the CSP. */
+    private static final java.util.regex.Pattern SAFE_HOST =
+        java.util.regex.Pattern.compile("[A-Za-z0-9.\\-\\[\\]:]+");
+
+    /**
+     * Per-request CSP, built instead of Spring's static {@code contentSecurityPolicy(...)}
+     * because {@code connect-src} must name the container-terminal websocket endpoint
+     * explicitly: browsers disagree on whether {@code 'self'} covers same-origin
+     * {@code ws:}/{@code wss:} (w3c/webappsec-csp#7), and the ones that say no refuse the
+     * connection before it is even attempted. 'unsafe-inline' styles: Emotion (MUI)
+     * injects style elements at runtime.
+     */
+    private static void writeContentSecurityPolicy(HttpServletRequest request, HttpServletResponse response) {
+        String host = request.getHeader("Host");
+        String wsSources = (host != null && SAFE_HOST.matcher(host).matches())
+            ? " ws://" + host + " wss://" + host
+            : "";
+        response.setHeader("Content-Security-Policy",
+            "default-src 'self'; "
+                + "script-src 'self'; "
+                + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                + "font-src 'self' https://fonts.gstatic.com; "
+                + "img-src 'self' data:; "
+                + "connect-src 'self'" + wsSources + "; "
+                + "object-src 'none'; "
+                + "frame-ancestors 'none'; "
+                + "base-uri 'self'; "
+                + "form-action 'self'");
     }
 
     /**

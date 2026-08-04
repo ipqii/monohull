@@ -4,6 +4,16 @@ All notable changes to Monohull are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/), and Monohull uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- The container terminal never connected in browsers whose Content-Security-Policy
+  engine doesn't count same-origin websockets under `connect-src 'self'`
+  (w3c/webappsec-csp#7): the CSP now names `ws://<host>` / `wss://<host>` explicitly,
+  built per request from the Host header. The terminal dialog also no longer sits on
+  "Pending" forever when the websocket is refused outright — it reports the refusal
+  in the terminal pane and flips the badge to Stopped.
+
 ## [1.0.1] — 2026-08-04
 
 ### Changed

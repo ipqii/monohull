@@ -58,33 +58,44 @@ export default function ContainerTerminalDialog({ open, onClose, containerId, co
     fit.fit()
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${proto}://${window.location.host}/api/containers/${containerId}/terminal`)
-    ws.binaryType = 'arraybuffer'
+    let ws: WebSocket | null = null
+    try {
+      ws = new WebSocket(`${proto}://${window.location.host}/api/containers/${containerId}/terminal`)
+    } catch (err) {
+      // A synchronous throw here is almost always the page's CSP refusing the ws://
+      // scheme — surface it instead of sitting on "connecting" forever.
+      setConnection('closed')
+      term.write(`\x1b[38;5;203m[websocket refused before connecting: ${err instanceof Error ? err.message : String(err)}]\x1b[0m\r\n`)
+    }
     const encoder = new TextEncoder()
 
+    const socket = ws
     const sendResize = () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }))
       }
     }
 
-    ws.onopen = () => {
-      setConnection('connected')
-      sendResize()
-      term.focus()
-    }
-    ws.onmessage = e => {
-      term.write(new Uint8Array(e.data as ArrayBuffer))
-    }
-    ws.onclose = e => {
-      setConnection('closed')
-      const reason = e.reason || (e.wasClean ? 'session ended' : 'connection lost')
-      term.write(`\r\n\x1b[38;5;240m[${reason}]\x1b[0m\r\n`)
+    if (socket) {
+      socket.binaryType = 'arraybuffer'
+      socket.onopen = () => {
+        setConnection('connected')
+        sendResize()
+        term.focus()
+      }
+      socket.onmessage = e => {
+        term.write(new Uint8Array(e.data as ArrayBuffer))
+      }
+      socket.onclose = e => {
+        setConnection('closed')
+        const reason = e.reason || (e.wasClean ? 'session ended' : 'connection lost')
+        term.write(`\r\n\x1b[38;5;240m[${reason}]\x1b[0m\r\n`)
+      }
     }
 
     const dataSub = term.onData(data => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(encoder.encode(data))
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(encoder.encode(data))
       }
     })
     const resizeSub = term.onResize(() => sendResize())
@@ -98,7 +109,7 @@ export default function ContainerTerminalDialog({ open, onClose, containerId, co
       observer.disconnect()
       dataSub.dispose()
       resizeSub.dispose()
-      ws.close()
+      socket?.close()
       term.dispose()
     }
   }, [open, containerId])

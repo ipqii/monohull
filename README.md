@@ -76,6 +76,18 @@ docker compose up -d
 from source with the same layout. Careful: that dev-oriented compose file falls back to
 `admin`/`admin` when `MONOHULL_ADMIN_PASSWORD` isn't set, rather than refusing to start.)
 
+**Upgrading to a new release** — the compose file pins the floating `ghcr.io/ipqii/monohull:1`
+tag, and `docker compose up -d` on its own never re-pulls a tag that already exists locally:
+
+```bash
+docker compose pull monohull-app
+docker compose up -d
+```
+
+Then reload the browser tab once or twice — the UI is a PWA, so the first load after an
+upgrade may still serve the previous cached shell while the new service worker installs.
+More in the [installation guide](https://ipqii.github.io/monohull/install/#upgrading).
+
 Open `http://localhost:8806` and log in as `admin`. First steps in the UI:
 
 1. **Registry** — point Monohull at the registry that holds your Maximo images.
