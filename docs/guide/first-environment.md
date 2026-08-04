@@ -84,7 +84,10 @@ Below that, one card per container (DB, APP, ADM, and any MOCK/SMTP), each with:
 - an **Actions** dropdown — runs any action whose target role matches this
   container; output streams in a dialog,
 - **Restart**, **Stop/Start**, and **Logs** — raw `docker logs` in a dialog, with
-  a **tail lines** input (default 500) and a refresh button.
+  a **tail lines** input (default 500) and a refresh button,
+- **Terminal** — an interactive shell inside the container (`docker exec` with a
+  real PTY, so full-screen tools like `vi` and `top` work). Available while the
+  container is running; uses bash when the image has it, sh otherwise.
 
 ### Pipeline tab
 

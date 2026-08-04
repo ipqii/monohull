@@ -4,6 +4,9 @@ import { test, expect, Page, Locator } from '@playwright/test'
  * Dragging an action from the palette into the pipeline opens a gap at the insertion point, so
  * it's obvious where the drop will land. These specs assert the gap and the resulting order
  * together — a preview that disagrees with the drop would be worse than no preview at all.
+ *
+ * Hovering a step means "before this one", and the space held open below the list means "at the
+ * end". One position per step: the list must move exactly once per card the pointer crosses.
  */
 
 const SEED_YAML = [
@@ -58,16 +61,24 @@ async function centre(locator: Locator) {
 }
 
 /**
- * Picks up a palette card and moves it over `target`, `yFraction` down that card's height.
- * Leaves the pointer down so the caller can inspect the gap before dropping.
+ * Where each step sits before anything is dragged. Read these up front and use them for the whole
+ * gesture: once the gap opens the cards are displaced, so a box read mid-drag points at a slot the
+ * card has already left — which is not where the pointer thinks it is.
  */
-async function dragOver(page: Page, actionName: string, target: Locator, yFraction: number) {
+async function stepBoxes(page: Page) {
+  const boxes = await page.getByTestId('pipeline-step').evaluateAll(
+    els => els.map(el => {
+      const r = (el as HTMLElement).getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    }),
+  )
+  return boxes
+}
+
+/** Picks up a palette card and moves it to `to`, leaving the pointer down. */
+async function dragTo(page: Page, actionName: string, to: { x: number; y: number }) {
   const source = page.getByTestId('palette-action').filter({ hasText: actionName }).first()
   const from = await centre(source)
-  const box = await target.boundingBox()
-  if (!box) throw new Error('target has no box')
-
-  const to = { x: box.x + box.width / 2, y: box.y + box.height * yFraction }
 
   await page.mouse.move(from.x, from.y)
   await page.mouse.down()
@@ -79,6 +90,11 @@ async function dragOver(page: Page, actionName: string, target: Locator, yFracti
   }
 }
 
+/** A point `yFraction` down a step's original box. */
+function pointOn(box: { x: number; y: number; width: number; height: number }, yFraction: number) {
+  return { x: box.x + box.width / 2, y: box.y + box.height * yFraction }
+}
+
 test.describe('Pipeline builder drop preview', () => {
   // The palette and the step list are side by side and both need to be on screen for a drag —
   // at the default 720px height the palette runs off the bottom.
@@ -87,16 +103,12 @@ test.describe('Pipeline builder drop preview', () => {
   test('cards below the insertion point make way, and the drop lands in the gap', async ({ page }) => {
     await seedSteps(page)
 
-    const steps = page.getByTestId('pipeline-step')
-    const thirdCard = steps.nth(2)
-    const cardHeight = (await thirdCard.boundingBox())!.height
+    const boxes = await stepBoxes(page)
+    const gap = boxes[2].height + 8
 
-    // Upper half of the third card => insert before it.
-    await dragOver(page, 'Deploy Package', thirdCard, 0.25)
+    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.25))
 
-    await expect.poll(() => stepShifts(page)).toEqual([
-      0, 0, cardHeight + 8, cardHeight + 8, cardHeight + 8,
-    ])
+    await expect.poll(() => stepShifts(page)).toEqual([0, 0, gap, gap, gap])
 
     await page.mouse.up()
 
@@ -105,34 +117,56 @@ test.describe('Pipeline builder drop preview', () => {
     ])
   })
 
-  test('hovering the lower half of a card inserts after it', async ({ page }) => {
+  test('the gap does not move while the pointer stays on one card', async ({ page }) => {
     await seedSteps(page)
 
-    const steps = page.getByTestId('pipeline-step')
-    const thirdCard = steps.nth(2)
-    const cardHeight = (await thirdCard.boundingBox())!.height
+    const boxes = await stepBoxes(page)
+    const gap = boxes[2].height + 8
+    const expected = [0, 0, gap, gap, gap]
 
-    await dragOver(page, 'Deploy Package', thirdCard, 0.75)
+    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.2))
+    await expect.poll(() => stepShifts(page)).toEqual(expected)
 
-    // The hovered card stays put; only the two below it move.
-    await expect.poll(() => stepShifts(page)).toEqual([
-      0, 0, 0, cardHeight + 8, cardHeight + 8,
-    ])
+    // Two things used to make the list twitch here: an insert-before/insert-after split at the
+    // card's midpoint, and pointerWithin ranking the drop area above the step whenever the
+    // pointer neared the middle of the list, which is roughly where these samples sit.
+    for (const fraction of [0.4, 0.5, 0.6, 0.8]) {
+      const p = pointOn(boxes[2], fraction)
+      await page.mouse.move(p.x, p.y)
+      await page.waitForTimeout(40)
+      expect(await stepShifts(page)).toEqual(expected)
+    }
 
     await page.mouse.up()
-
     expect(await stepNames(page)).toEqual([
-      SEEDED_NAMES[0], SEEDED_NAMES[1], SEEDED_NAMES[2], 'Deploy Package', SEEDED_NAMES[3], SEEDED_NAMES[4],
+      SEEDED_NAMES[0], SEEDED_NAMES[1], 'Deploy Package', SEEDED_NAMES[2], SEEDED_NAMES[3], SEEDED_NAMES[4],
     ])
+  })
+
+  test('the space below the list appends to the end', async ({ page }) => {
+    await seedSteps(page)
+
+    const boxes = await stepBoxes(page)
+    const last = boxes[4]
+    const gap = last.height + 8
+
+    // Land on the last card first, so the tail space is open, then move down into it.
+    await dragTo(page, 'Deploy Package', pointOn(last, 0.5))
+    await expect.poll(() => stepShifts(page)).toEqual([0, 0, 0, 0, gap])
+
+    await page.mouse.move(last.x + last.width / 2, last.y + last.height + 20)
+    await expect.poll(() => stepShifts(page)).toEqual([0, 0, 0, 0, 0])
+
+    await page.mouse.up()
+    expect(await stepNames(page)).toEqual([...SEEDED_NAMES, 'Deploy Package'])
   })
 
   test('the gap closes when the pointer leaves the pipeline', async ({ page }) => {
     await seedSteps(page)
 
-    const steps = page.getByTestId('pipeline-step')
-    const thirdCard = steps.nth(2)
+    const boxes = await stepBoxes(page)
 
-    await dragOver(page, 'Deploy Package', thirdCard, 0.25)
+    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.25))
     await expect.poll(() => stepShifts(page)).not.toEqual([0, 0, 0, 0, 0])
 
     // Back out over the palette — nothing is pending, so nothing should be displaced.

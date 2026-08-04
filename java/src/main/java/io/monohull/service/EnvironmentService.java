@@ -376,6 +376,12 @@ public class EnvironmentService {
         containerRepo.save(c);
     }
 
+    /** Resolve the docker container id for an interactive terminal, with the same
+     *  "was it ever created?" guard the start/stop/restart card buttons use. */
+    public String getDockerContainerIdForTerminal(Long containerId) {
+        return requireCreated(containerId, "open a terminal on").getDockerContainerId();
+    }
+
     /** Resolve a container row and insist its docker container actually exists —
      *  a null id means the build failed before creating it, which used to surface
      *  as an NPE/500 when the user clicked stop/start/restart on the card. */

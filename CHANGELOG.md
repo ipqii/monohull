@@ -12,10 +12,15 @@ All notable changes to Monohull are documented here. The format follows
   `docs/brand/`; every PNG derivative is generated from `frontend/public/monohull-icon.svg`.
 
 ### Added
+- **Terminal** button on every container card: an interactive shell (xterm.js in the
+  browser, bridged over a websocket to `docker exec` with a real PTY) straight into the
+  DB, APP, ADM, or addon container — no SSH to the docker host needed. Prefers bash and
+  falls back to sh for slim images, resizes with the window, and requires the same
+  login session as the rest of the API.
 - The pipeline builder shows where a dragged action will land: the steps below the
-  pointer move down to open a gap, and hovering the top or bottom half of a step
-  puts the new action before or after it. Previously the list didn't react at all
-  until the drop.
+  pointer move down to open a gap. Hovering a step inserts before it and the space
+  below the list adds to the end, so the list moves exactly once per step the
+  pointer crosses. Previously it didn't react at all until the drop.
 - Jump from an action in a pipeline straight to its definition. Pipeline steps —
   in the builder, in the Available Actions palette, and on an environment's
   Pipeline tab — carry a link to the action editor, which is the shortest route
