@@ -118,37 +118,28 @@ test.describe('vanilla Maximo regression', () => {
     const app = (env.containers ?? []).find((c: any) => c.role === 'APP')
     expect(app, 'environment has an APP container').toBeTruthy()
 
-    const fetchAppLog = async () => {
-      const r = await api.get(`/api/containers/${app.id}/logs?tail=5000`)
-      expect(r.ok(), `fetch APP container log -> ${r.status()}`).toBeTruthy()
-      return ((await r.json()) as string[]).join('\n')
-    }
+    // One boot-to-ready cycle is ~170k log lines (measured on a live env), and the
+    // pipeline's restart-was means two of them - 400k reaches back past the last
+    // Liberty launch. The markers we need are all logged before whoami can succeed,
+    // so a single fetch suffices; no polling.
+    const logResponse = await api.get(`/api/containers/${app.id}/logs?tail=400000`,
+      { timeout: 120_000 })
+    expect(logResponse.ok(), `fetch APP container log -> ${logResponse.status()}`).toBeTruthy()
+    const log = ((await logResponse.json()) as string[]).join('\n')
 
-    let log = await fetchAppLog()
     expect(log, 'Maximo reached readiness (BMXAA6472I)').toContain('BMXAA6472I')
-
-    // Pins issue #7 / PR #8: with the embedded JMS config loaded, the stock
-    // JMSQSEQCONSUMER cron consumes jms/maximo/int/queues/* cleanly; without it,
-    // every cycle logs the missing-JNDI error. Liberty writes no messaging-engine
-    // marker to the console at all (verified against a working env), so the cron's
-    // own behavior is the only trustworthy signal - and its first cycle lands a
-    // short while after MXServer readiness, so poll rather than sample once.
-    const jmsDeadline = Date.now() + 6 * 60_000
-    const jmsError = 'Intermediate context does not exist: jms/maximo'
-    const jmsClean = /cronAction (start|end) for Integration crontask JMSQSEQCONSUMER/
-    for (;;) {
-      if (log.includes(jmsError)) {
-        await attachBuildLog(testInfo)
-        throw new Error('JMS regression: JMSQSEQCONSUMER logged the missing-JNDI error (issue #7)')
-      }
-      if (jmsClean.test(log)) break
-      if (Date.now() > jmsDeadline) {
-        await attachBuildLog(testInfo)
-        throw new Error('JMSQSEQCONSUMER cron produced neither a clean cycle nor the JNDI error within 6 min')
-      }
-      await new Promise(resolve => setTimeout(resolve, 15_000))
-      log = await fetchAppLog()
-    }
+    // Pins issue #7 / PR #8: featureManager merges across config sources, so
+    // wasJmsServer-1.0 shows up in Liberty's installed-features line if and only
+    // if the configDropins JMS dropin was loaded. (Liberty logs no CWSID/messaging-
+    // engine marker to the console at all, and the JMSQSEQCONSUMER cron that made
+    // issue #7 visible is not active on the vanilla DB - verified in runs 4 and 5 -
+    // so the feature list is the only marker that exists on every environment.)
+    expect(log, 'JMS dropin loaded (CWWKF0012I lists wasJmsServer-1.0)')
+      .toMatch(/CWWKF0012I[^\n]*wasJmsServer-1\.0/)
+    // Belt-and-braces for envs where a JMS-consuming cron IS active: the
+    // missing-JNDI error must never appear anywhere in the log.
+    expect(log, 'no jms/maximo JNDI errors').not.toContain(
+      'Intermediate context does not exist: jms/maximo')
 
     // --- 4. Teardown through the product ---------------------------------
     const del = await api.delete(`/api/environments/${ENV_ID}`)
