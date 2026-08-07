@@ -226,10 +226,9 @@ public class BuildService {
             for (ActionService.ResolvedAction action : ordered) {
                 if ("start-app".equals(action.id())) {
                     if (appContainer != null && !appStarted) {
-                        // Drop server-custom.xml into the Liberty config dir AFTER build-ear's
+                        // Drop the JMS dropin into the Liberty config dir AFTER build-ear's
                         // wipe so it survives, and BEFORE APP starts so Liberty loads it.
                         writeServerCustomXml(admContainer, config, logger);
-                        ensureWasJmsServerFeature(admContainer, config, logger);
                         // Update SMTP system properties (mail.smtp.host/port, mxe.smtp.user/password)
                         // before Maximo starts so they're loaded fresh. Pipeline restore steps,
                         // if any, have already run and won't overwrite our values.
@@ -253,7 +252,6 @@ public class BuildService {
             // start it so the env finishes in a usable state.
             if (appContainer != null && !appStarted) {
                 writeServerCustomXml(admContainer, config, logger);
-                ensureWasJmsServerFeature(admContainer, config, logger);
                 if (config != null && config.isSmtpEnabled()) {
                     configureSmtpProperties(dbContainer, env, logger);
                 }
@@ -279,12 +277,21 @@ public class BuildService {
         "/opt/IBM/SMP/maximo/applications/maximo/properties/maximo.properties";
 
     // ADM-side path that resolves to /config in the APP container via the shared
-    // host bind mount. build-ear writes its bundle here; we drop server-custom.xml
-    // alongside it so Liberty loads our JMS config at APP startup.
+    // host bind mount. build-ear writes its bundle here.
     private static final String LIBERTY_CONFIG_DIR =
         "/opt/IBM/SMP/maximo/deployment/was-liberty-default/deployment/maximo-all/maximo-all-server";
-    private static final String SERVER_CUSTOM_XML_PATH = LIBERTY_CONFIG_DIR + "/server-custom.xml";
-    private static final String SERVER_XML_PATH = LIBERTY_CONFIG_DIR + "/server.xml";
+    // The JMS config goes into configDropins/overrides, which Liberty loads for
+    // EVERY server.xml flavor (issue #7): IBM's standard server.xml includes only
+    // /config/manage/serverxml/server-custom.xml (absolute) while the dev flavor
+    // includes a relative server-custom.xml — a file next to server.xml is loaded
+    // by one flavor and silently ignored by the other. A dropin needs no include
+    // line and survives server.xml being restored from the config-servers template.
+    private static final String SERVER_CUSTOM_XML_PATH =
+        LIBERTY_CONFIG_DIR + "/configDropins/overrides/server-custom.xml";
+    // Pre-issue-#7 target, loaded only by the dev server.xml flavor; removed on
+    // every write so old envs don't carry a stale second copy of the JMS config.
+    private static final String LEGACY_SERVER_CUSTOM_XML_PATH =
+        LIBERTY_CONFIG_DIR + "/server-custom.xml";
 
     private record JdbcConfig(String driver, String url) {}
 
@@ -360,13 +367,15 @@ public class BuildService {
     }
 
     /**
-     * Drop our Liberty server-custom.xml into the bind-mounted Maximo Liberty config
-     * directory. Enables the embedded JMS messaging engine so MAXQUEUE rows for the
-     * standard inbound/outbound queues (sqin, sqout, cqin, cqinerr) resolve without
-     * an external IBM MQ broker. Runs unconditionally for every env.
+     * Drop our Liberty JMS config into configDropins/overrides under the bind-mounted
+     * Maximo Liberty config directory. Enables the embedded messaging engine so the
+     * MAXQUEUE rows for the stock integration queues resolve without an external IBM
+     * MQ broker; the dropin also carries the wasJmsServer-1.0 feature (featureManager
+     * merges across config sources), so server.xml is never edited. Runs
+     * unconditionally for every env.
      *
      * Must run AFTER build-ear (which wipes the dir before extracting its bundle) and
-     * BEFORE APP starts (Liberty reads server-custom.xml at server start).
+     * BEFORE APP starts (Liberty reads configDropins at server start).
      */
     private void writeServerCustomXml(ContainerEntity admContainer,
                                       EnvironmentConfigEntity config,
@@ -389,53 +398,20 @@ public class BuildService {
 
         // Single-quoted heredoc delimiter (XML_EOF) suppresses shell expansion, so the
         // XML content (which contains $, backticks, etc. in comments potentially) is
-        // written verbatim. mkdir -p guards against the dir not existing (e.g. if a
-        // build-ear-less pipeline is used).
+        // written verbatim. mkdir -p guards against the dropin dir not existing yet
+        // (build-ear's bundle doesn't ship one). The legacy copy next to server.xml
+        // is removed so old envs don't keep a stale, flavor-dependent duplicate.
         String script = "mkdir -p \"$(dirname " + SERVER_CUSTOM_XML_PATH + ")\" && " +
+            "rm -f " + LEGACY_SERVER_CUSTOM_XML_PATH + " && " +
             "cat > " + SERVER_CUSTOM_XML_PATH + " << 'XML_EOF'\n" +
             content +
             (content.endsWith("\n") ? "" : "\n") +
             "XML_EOF";
 
-        logger.accept("[liberty-config] Writing server-custom.xml (Liberty JMS messaging engine)");
+        logger.accept("[liberty-config] Writing configDropins/overrides/server-custom.xml (Liberty JMS messaging engine)");
         int rc = docker.execInContainer(admContainer.getDockerContainerId(), script, null, 30, logger);
         if (rc != 0) {
             logger.accept("[liberty-config] Warning: server-custom.xml write exited with " + rc);
-        }
-    }
-
-    /**
-     * Ensure {@code <feature>wasJmsServer-1.0</feature>} appears inside server.xml's
-     * featureManager block. Without it, Liberty ignores the messaging engine declared
-     * in server-custom.xml. Idempotent: greps for the literal feature line first and
-     * exits noop if already present.
-     */
-    private void ensureWasJmsServerFeature(ContainerEntity admContainer,
-                                           EnvironmentConfigEntity config,
-                                           Consumer<String> logger) {
-        if (admContainer == null || admContainer.getDockerContainerId() == null) return;
-        if (config == null || config.getHostVolumePath() == null) return;
-
-        // The sed regex captures whatever indentation the existing </featureManager>
-        // line uses (\1) and reuses it for both the new <feature> line (with an extra
-        // 4 spaces of indent) and the unchanged closing tag.
-        String script = String.join("\n",
-            "set -e",
-            "if [ ! -f " + SERVER_XML_PATH + " ]; then",
-            "    echo '[liberty-config] server.xml not found; skipping wasJmsServer-1.0 check'",
-            "    exit 0",
-            "fi",
-            "if grep -q '<feature>wasJmsServer-1.0</feature>' " + SERVER_XML_PATH + "; then",
-            "    echo '[liberty-config] wasJmsServer-1.0 already declared in server.xml'",
-            "else",
-            "    sed -i -E 's|^([[:space:]]*)</featureManager>|\\1    <feature>wasJmsServer-1.0</feature>\\n\\1</featureManager>|' " + SERVER_XML_PATH,
-            "    echo '[liberty-config] Added wasJmsServer-1.0 to server.xml featureManager'",
-            "fi"
-        );
-
-        int rc = docker.execInContainer(admContainer.getDockerContainerId(), script, null, 30, logger);
-        if (rc != 0) {
-            logger.accept("[liberty-config] Warning: wasJmsServer-1.0 check exited with " + rc);
         }
     }
 
@@ -714,10 +690,9 @@ public class BuildService {
         String workspaceBindSource = ws != null ? ws.bindSource() : null;
 
         // Mirror the inline start-app block in startBuild(): make sure Liberty
-        // sees server-custom.xml + the JMS feature, and SMTP props if enabled,
-        // then create the APP container and wait for it.
+        // sees the JMS dropin, and SMTP props if enabled, then create the APP
+        // container and wait for it.
         writeServerCustomXml(admContainer, config, logger);
-        ensureWasJmsServerFeature(admContainer, config, logger);
         if (config != null && config.isSmtpEnabled() && dbContainer != null) {
             configureSmtpProperties(dbContainer, env, logger);
         }
