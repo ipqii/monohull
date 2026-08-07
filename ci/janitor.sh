@@ -20,7 +20,9 @@ docker volume ls -q | grep -E '^(monohull-ci-|made-monohull-ci-)' | xargs -r doc
 
 if [ -d "${root}" ]; then
   echo "[janitor] Host env dirs under ${root}"
-  find "${root}" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
+  # Env subdirs are created by containers and end up root-owned; sweep from a
+  # container (same trick Monohull's own teardown uses) so no sudo is needed.
+  docker run --rm -v "${root}:/sweep" busybox sh -c 'rm -rf /sweep/* /sweep/.[!.]*' 2>/dev/null
 fi
 
 echo "[janitor] Done"
