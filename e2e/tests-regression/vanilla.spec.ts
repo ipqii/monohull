@@ -92,6 +92,7 @@ test.describe('vanilla Maximo regression', () => {
         if (uiStatus === 200 || Date.now() > settleDeadline) break
         await new Promise(resolve => setTimeout(resolve, 15_000))
       }
+      if (uiStatus !== 200) await attachBuildLog(testInfo)
       expect(uiStatus, `${maximo}/maximo/ should serve the UI within the settle window`).toBe(200)
 
       const maxauth = Buffer.from(`maxadmin:${MAXADMIN_PASSWORD}`).toString('base64')
@@ -107,6 +108,7 @@ test.describe('vanilla Maximo regression', () => {
         if (whoamiStatus === 200 || Date.now() > settleDeadline) break
         await new Promise(resolve => setTimeout(resolve, 15_000))
       }
+      if (whoamiStatus !== 200) await attachBuildLog(testInfo)
       expect(whoamiStatus, 'oslc/whoami with maxauth should authenticate within the settle window').toBe(200)
     } finally {
       await anon.dispose()
