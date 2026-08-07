@@ -109,7 +109,7 @@ Everything is environment-variable driven; the important ones:
 | Variable | Purpose | Default |
 |---|---|---|
 | `MONOHULL_ADMIN_USERNAME` / `MONOHULL_ADMIN_PASSWORD` | Initial login seeded on first boot | `admin` / *(set one!)* |
-| `MONOHULL_API_KEY` | Static bearer key for read-only service access; empty disables | *(empty)* |
+| `MONOHULL_API_KEY` | Static bearer key for full API access (CLI/CI/automation); empty disables | *(empty)* |
 | `MONOHULL_NETWORK_SUBNET_POOL` | /16 block carved into per-environment /24 networks | `10.100.0.0/16` |
 | `MONOHULL_MAXIMO_DOMAIN` | Base domain for per-environment public Maximo URLs (reverse-proxy labels); empty = LAN-only | *(empty)* |
 | `MONOHULL_PUBLIC_BASE_URL` | Public URL Monohull itself is reachable at (webhook rendering) | *(empty)* |

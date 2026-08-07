@@ -144,6 +144,14 @@
 			<scope>test</scope>
 		</dependency>
 
+		<!-- MockMvc security post-processors (user(), springSecurity()) for the
+		     filter-chain slice test of the bearer API key. -->
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
 	</dependencies>
 	<build>
 		<!-- Version-independent jar name so the Dockerfile and run docs never chase the version. -->
