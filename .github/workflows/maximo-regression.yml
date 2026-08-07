@@ -95,7 +95,7 @@ jobs:
             -e E2E_PASSWORD="$CI_ADMIN_PASSWORD" \
             -e CI=1 \
             mcr.microsoft.com/playwright:v1.50.0-jammy \
-            bash -c "npm ci --no-audit --no-fund && npx playwright test --project=regression"
+            bash -c "npm install --no-audit --no-fund && npx playwright test --project=regression"
 
       - name: Upload Playwright report
         if: ${{ failure() && !inputs.cleanup-only }}
