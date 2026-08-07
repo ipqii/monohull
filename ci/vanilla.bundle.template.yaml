@@ -34,24 +34,35 @@ imageConfig:
     - key: MAXLOAD_USER
       value: mxintadm
 pipeline:
-  # All steps are built-in actions, present in any fresh Monohull instance.
+  # All steps are built-in actions, present in any fresh Monohull instance, in the
+  # same order as their autoRun/afterAction chain in application.yml. Two ordering
+  # rules matter: swap-web-xml-to-dev must precede build-ear (the dev descriptors
+  # compile into the EAR; without them Liberty answers /maximo/ui/* and /oslc/*
+  # with an unsatisfiable BASIC 401), and swap-server-xml-to-dev must precede
+  # start-app (APP has to boot on the dev server.xml, not hot-swap under it).
   name: ci-vanilla
   description: Vanilla MAS build for the post-merge regression run
   steps:
     - actionKey: run-updatedb-preprocessor
       sequenceOrder: 0
-    - actionKey: build-ear
+    - actionKey: swap-web-xml-to-dev
       sequenceOrder: 1
-    - actionKey: mas-fix-pre-updatedb
+    - actionKey: build-ear
       sequenceOrder: 2
-    - actionKey: run-updatedb
+    - actionKey: mas-fix-pre-updatedb
       sequenceOrder: 3
-    - actionKey: mas-fix-post-updatedb
+    - actionKey: run-updatedb
       sequenceOrder: 4
-    - actionKey: start-app
+    - actionKey: mas-fix-post-updatedb
       sequenceOrder: 5
-    - actionKey: swap-server-xml-to-dev
+    - actionKey: set-maxadmin-password
       sequenceOrder: 6
+    - actionKey: swap-server-xml-to-dev
+      sequenceOrder: 7
+    - actionKey: start-app
+      sequenceOrder: 8
+    - actionKey: restart-was
+      sequenceOrder: 9
 launch:
   description: CI vanilla MAS regression
   # Dynamic ports from the CI instance's own 13000-13099 range.
