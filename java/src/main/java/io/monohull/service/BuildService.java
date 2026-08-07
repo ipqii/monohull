@@ -18,7 +18,6 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -703,26 +702,22 @@ public class BuildService {
 
     private String createEnvSubdir(String hostVolumePath, String envName, String subdir, Consumer<String> logger) {
         String sanitized = envName.toLowerCase().replaceAll("[^a-z0-9]", "-");
-        Path dir = Path.of(hostVolumePath, sanitized, subdir);
-        try {
-            Files.createDirectories(dir);
-            // Monohull itself runs as root (its container's default), so the dir
-            // lands owned by root with mode 755. The downstream APP/ADM
-            // containers bind-mount this and run as a non-root image user
-            // (e.g. maximoinstall uid 1001) that can't write to a root-owned
-            // 755 dir — the build-ear tar step then fails with "Permission
-            // denied". Open it up so any container user can write.
-            try {
-                Files.setPosixFilePermissions(dir,
-                    java.util.EnumSet.allOf(java.nio.file.attribute.PosixFilePermission.class));
-            } catch (UnsupportedOperationException | IOException ignored) {
-                // Non-POSIX FS (Windows dev) or already correctly permissioned — harmless.
-            }
-            logger.accept("[volume] Created directory: " + dir);
-        } catch (IOException e) {
-            logger.accept("[volume] Warning: could not create " + dir + ": " + e.getMessage());
+        // The dir must exist ON THE DOCKER HOST with open perms BEFORE the bind mount.
+        // Monohull's own container normally has only the docker socket mounted, so
+        // java.nio on this path would create a directory nobody outside this container
+        // ever sees — the daemon then auto-creates the real one as root:755 when the
+        // ADM starts, and the build-ear tar step (running as maximoinstall) fails with
+        // "Permission denied". Delegate to a helper container on the host instead,
+        // the same way env teardown removes these dirs.
+        String dir = hostVolumePath + "/" + sanitized + "/" + subdir;
+        if (docker.createHostPathSubdir(hostVolumePath, sanitized, subdir)) {
+            logger.accept("[volume] Created host directory: " + dir);
+        } else {
+            logger.accept("[volume] Warning: could not create host directory " + dir
+                + " — the bind mount will come up root-owned and the build-ear tar step "
+                + "will fail with Permission denied.");
         }
-        return dir.toString();
+        return dir;
     }
 
     private String resolveEnvSubdir(String hostVolumePath, String envName, String subdir) {

@@ -837,39 +837,78 @@ public class DockerService {
      */
     public void removeHostPathSubdir(String parentHostPath, String subdir) {
         if (parentHostPath == null || parentHostPath.isBlank()) return;
-        if (subdir == null || subdir.isBlank()) return;
-        // Defensive: the subdir must be a single path component, no traversal.
-        if (subdir.contains("/") || subdir.contains("..") || subdir.equals(".") || subdir.equals("*")) {
+        if (!isSafePathComponent(subdir)) {
             log.warn("Refusing to remove host subdir with suspicious name: {}", subdir);
             return;
         }
-
-        String cleanupImage = "busybox:latest";
         try {
-            try {
-                docker.inspectImageCmd(cleanupImage).exec();
-            } catch (NotFoundException notFound) {
-                log.info("Pulling {} for host-path cleanup", cleanupImage);
-                docker.pullImageCmd(cleanupImage).start().awaitCompletion(2, TimeUnit.MINUTES);
-            }
-
-            HostConfig hostConfig = HostConfig.newHostConfig()
-                .withBinds(new Bind(parentHostPath, new Volume("/parent")))
-                .withAutoRemove(true);
-
-            CreateContainerResponse res = docker.createContainerCmd(cleanupImage)
-                .withHostConfig(hostConfig)
-                .withCmd("sh", "-c", "rm -rf '/parent/" + subdir + "'")
-                .withLabels(Map.of(MANAGED_LABEL, "true"))
-                .exec();
-
-            docker.startContainerCmd(res.getId()).exec();
-            docker.waitContainerCmd(res.getId())
-                .exec(new com.github.dockerjava.core.command.WaitContainerResultCallback())
-                .awaitCompletion(60, TimeUnit.SECONDS);
+            runHelperOnHostPath(parentHostPath, "rm -rf '/parent/" + subdir + "'");
             log.info("Removed host path: {}/{}", parentHostPath, subdir);
         } catch (Exception e) {
             log.warn("Failed to remove host path {}/{}: {}", parentHostPath, subdir, e.getMessage());
         }
+    }
+
+    /**
+     * Create {@code parentHostPath/envDir/subdir} on the DOCKER HOST with wide-open
+     * (777) permissions, so a container user (e.g. maximoinstall uid 1001) can write
+     * into the bind mount that follows. Like {@link #removeHostPathSubdir}, this runs
+     * through a short-lived helper container: Monohull itself usually runs in its own
+     * container without the host filesystem mounted, so java.nio would create a
+     * directory nobody outside ever sees while the daemon auto-creates the real one
+     * as root:755. Returns false (after logging) when the helper fails.
+     */
+    public boolean createHostPathSubdir(String parentHostPath, String envDir, String subdir) {
+        if (parentHostPath == null || parentHostPath.isBlank()) return false;
+        if (!isSafePathComponent(envDir) || !isSafePathComponent(subdir)) {
+            log.warn("Refusing to create host subdir with suspicious name: {}/{}", envDir, subdir);
+            return false;
+        }
+        try {
+            String envPath = "/parent/" + envDir;
+            String target = envPath + "/" + subdir;
+            runHelperOnHostPath(parentHostPath,
+                "mkdir -p '" + target + "' && chmod 777 '" + envPath + "' '" + target + "'");
+            log.info("Created host path: {}/{}/{}", parentHostPath, envDir, subdir);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to create host path {}/{}/{}: {}", parentHostPath, envDir, subdir, e.getMessage());
+            return false;
+        }
+    }
+
+    /** Single non-traversing path component — safe to splice into the helper's sh -c. */
+    private static boolean isSafePathComponent(String component) {
+        return component != null && !component.isBlank()
+            && !component.contains("/") && !component.contains("..")
+            && !component.equals(".") && !component.equals("*")
+            && !component.contains("'");
+    }
+
+    /** Run a shell command in a throwaway busybox container with {@code hostPath}
+     *  bind-mounted at /parent. The container auto-removes itself when done. */
+    private void runHelperOnHostPath(String hostPath, String command) throws InterruptedException {
+        String helperImage = "busybox:latest";
+        try {
+            docker.inspectImageCmd(helperImage).exec();
+        } catch (NotFoundException notFound) {
+            log.info("Pulling {} for host-path helper", helperImage);
+            docker.pullImageCmd(helperImage).start().awaitCompletion(2, TimeUnit.MINUTES);
+        }
+
+        HostConfig hostConfig = HostConfig.newHostConfig()
+            .withBinds(new Bind(hostPath, new Volume("/parent")))
+            .withAutoRemove(true);
+
+        CreateContainerResponse res = docker.createContainerCmd(helperImage)
+            .withHostConfig(hostConfig)
+            .withCmd("sh", "-c", command)
+            .withLabels(Map.of(MANAGED_LABEL, "true"))
+            .exec();
+
+        docker.startContainerCmd(res.getId()).exec();
+        docker.waitContainerCmd(res.getId())
+            .exec(new com.github.dockerjava.core.command.WaitContainerResultCallback())
+            .awaitCompletion(60, TimeUnit.SECONDS);
     }
 }

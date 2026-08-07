@@ -35,12 +35,25 @@ export default defineConfig({
       workbox: {
         // App-shell precache (Vite-emitted JS/CSS/HTML). API and SSE streams must hit the
         // network — never cache them.
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
+        //
+        // Navigations are NetworkFirst rather than served from the precache: the
+        // document's RESPONSE HEADERS (notably the CSP) ship with the cached copy, so
+        // precache-first kept enforcing the previous release's CSP until the service
+        // worker updated — which is how the container terminal stayed blocked after
+        // the 1.0.2 upgrade. Online loads now always fetch the live shell; the cached
+        // copy (per visited URL) is only an offline fallback.
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
             handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: ({ request, url }) => request.mode === 'navigate' && !url.pathname.startsWith('/api/'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-shell',
+              networkTimeoutSeconds: 4,
+            },
           },
           {
             urlPattern: /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.*/i,
