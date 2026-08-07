@@ -58,9 +58,19 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(csrfHandler)
                 // External git providers can't echo our CSRF token; webhook authenticity is
                 // verified by per-repo signature/secret in WebhookService instead.
-                .ignoringRequestMatchers("/api/webhooks/**"))
+                .ignoringRequestMatchers("/api/webhooks/**")
+                // Bearer-key callers (CLI/CI) are exempt too: CSRF defends cookie-session
+                // auth against requests the browser attaches credentials to implicitly,
+                // and no browser ever attaches an Authorization: Bearer header on its
+                // own. Without this, ApiKeyAuthFilter authenticated the request but the
+                // CsrfFilter (which runs earlier) had already 403'd every mutation, so
+                // the key was silently read-only.
+                .ignoringRequestMatchers(request -> {
+                    String authorization = request.getHeader("Authorization");
+                    return authorization != null && authorization.startsWith("Bearer ");
+                }))
             .addFilterAfter(new CsrfCookieFilter(), BasicAuthenticationFilter.class)
-            // Service-to-service auth for external dashboards (read-only API access).
+            // Service-to-service auth for CLI/automation callers (full API access).
             .addFilterBefore(new ApiKeyAuthFilter(apiKey), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/login", "/api/auth/me").permitAll()

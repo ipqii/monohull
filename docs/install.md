@@ -188,7 +188,7 @@ variables. The most commonly set variables:
 | `MONOHULL_NETWORK_SUBNET_POOL` | `10.100.0.0/16` | `/16` block Monohull carves per-environment `/24` networks from. Must not overlap the host LAN or other cluster networks. |
 | `MONOHULL_PR_BUILDS_MAX_CONCURRENT` | `2` | Max concurrent per-pull-request builds; extra builds queue. |
 | `MONOHULL_PR_BUILDS_WORKSPACE_ROOT` | `/docker/volumefs/pr-builds` | Root for per-PR checkouts. Must be on a host-mounted volume so the path resolves for bind mounts. |
-| `MONOHULL_API_KEY` | *(empty)* | Static bearer key for service-to-service read access. Empty disables API-key auth. |
+| `MONOHULL_API_KEY` | *(empty)* | Static bearer key for full service-to-service API access (used by CLI/CI callers; exempt from CSRF). Empty disables API-key auth. |
 
 ### Public environment routing (optional)
 

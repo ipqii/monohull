@@ -15,10 +15,12 @@ import java.security.MessageDigest;
 import java.util.List;
 
 /**
- * Authenticates service-to-service callers (external dashboards/automation) that present a
+ * Authenticates service-to-service callers (CLIs, CI, external dashboards) that present a
  * static bearer key via {@code Authorization: Bearer <monohull.api.key>}. On a match the
  * request runs as a synthetic {@code made-service} principal with {@code ROLE_SERVICE},
- * satisfying the {@code /api/**} authentication requirement for read access.
+ * satisfying the {@code /api/**} authentication requirement — for the full API, since
+ * bearer requests are also exempt from CSRF (see SecurityConfig): CSRF exists to protect
+ * cookie-session auth, and browsers never attach an Authorization header implicitly.
  *
  * <p>No-op when no key is configured, or when the request is already authenticated
  * (e.g. a normal user session), so it never weakens existing auth.
