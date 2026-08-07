@@ -31,6 +31,13 @@ monohull:
     # exhausted default address pools on busy hosts. Must not overlap the host LAN or
     # any cluster/overlay networks on the host. Override via MONOHULL_NETWORK_SUBNET_POOL.
     subnet-pool: ${MONOHULL_NETWORK_SUBNET_POOL:10.100.0.0/16}
+  ports:
+    # Host-port range for dynamically allocated environment ports. Allocation is
+    # collision-checked against this instance's database only, never the live
+    # daemon - a second Monohull instance on the same Docker host (e.g. a CI
+    # instance) MUST run with its own, non-overlapping range.
+    range-start: ${MONOHULL_PORTS_RANGE_START:12000}
+    range-end: ${MONOHULL_PORTS_RANGE_END:12999}
   public:
     # Base domain for per-environment Maximo URLs (e.g. "maximo.example.com").
     # When set, each env's APP container is labelled for the host Traefik and

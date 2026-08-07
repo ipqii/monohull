@@ -1,0 +1,60 @@
+# Vanilla-Maximo profile for the post-merge regression run.
+#
+# This is a template: ${CI_*} placeholders are filled by envsubst in ci/seed.sh.
+# The private values (registry, image refs) live in the runner host's env file,
+# never in this public repo.
+#
+# client/project drive every generated name (environment, containers, network,
+# DB volume, host subdir) - the per-run project is what guarantees a CI env can
+# never collide with a production environment on the same Docker daemon.
+kind: madeImageConfigBundle
+schemaVersion: 2
+imageConfig:
+  client: ci
+  project: ${CI_RUN_PROJECT}
+  maximoVersion: MAS
+  appImage: ${CI_VANILLA_APP_IMAGE}
+  dbImage: ${CI_VANILLA_DB_IMAGE}
+  admImage: ${CI_VANILLA_ADM_IMAGE}
+  dbVendor: DB2
+  dbName: maximo
+  dbContainerPort: 25000
+  dbCommand: restore
+  dbVolumeTarget: /home/db2inst1
+  hostVolumePath: ${CI_HOST_VOLUME_ROOT}
+  dbExtraEnv:
+    - key: MAXIMO_DB_PASSWORD
+      value: maximo
+  dbExtraBinds:
+    # The vanilla DB image's `restore` command pulls its backup via the AWS CLI.
+    - hostPath: ${CI_AWS_DIR}
+      containerPath: /home/db2inst1/.aws
+      readOnly: true
+  admExtraEnv:
+    - key: MAXLOAD_USER
+      value: mxintadm
+pipeline:
+  # All steps are built-in actions, present in any fresh Monohull instance.
+  name: ci-vanilla
+  description: Vanilla MAS build for the post-merge regression run
+  steps:
+    - actionKey: run-updatedb-preprocessor
+      sequenceOrder: 0
+    - actionKey: build-ear
+      sequenceOrder: 1
+    - actionKey: mas-fix-pre-updatedb
+      sequenceOrder: 2
+    - actionKey: run-updatedb
+      sequenceOrder: 3
+    - actionKey: mas-fix-post-updatedb
+      sequenceOrder: 4
+    - actionKey: start-app
+      sequenceOrder: 5
+    - actionKey: swap-server-xml-to-dev
+      sequenceOrder: 6
+launch:
+  description: CI vanilla MAS regression
+  # Dynamic ports from the CI instance's own 13000-13099 range.
+  staticPorts: false
+  includeMock: false
+  includeSmtp: false

@@ -1,0 +1,114 @@
+# Post-merge Maximo regression on the self-hosted Docker host.
+#
+# Stands up a throwaway Monohull instance built from the merged code, launches a
+# REAL vanilla Maximo environment through it, regression-tests the result
+# (e2e/tests-regression), and tears everything down. See ci/README.md.
+#
+# SECURITY: this repo is public and the runner is self-hosted. This workflow
+# must only ever trigger on push to main (repo writers) and manual dispatch -
+# NEVER on pull_request, so fork code can never reach the runner.
+name: Maximo regression
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      cleanup-only:
+        description: Only run the janitor (clean up leftovers from a broken run)
+        type: boolean
+        default: false
+
+concurrency:
+  group: maximo-regression
+  cancel-in-progress: false   # a half-built run must reach its own cleanup
+
+jobs:
+  regression:
+    runs-on: [self-hosted, dockerserver]
+    timeout-minutes: 120
+    env:
+      COMPOSE_PROJECT: monohull-ci-${{ github.run_id }}
+      CI_MONOHULL_URL: http://localhost:8899
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load host configuration (private registry + image refs)
+        run: |
+          set -euo pipefail
+          test -f /home/andrej/monohull-ci/ci.env || { echo "::error::/home/andrej/monohull-ci/ci.env missing on the runner"; exit 1; }
+          # Values become masked step env for the rest of the job.
+          while IFS='=' read -r key value; do
+            case "$key" in ''|\#*) continue;; esac
+            echo "::add-mask::$value"
+            echo "$key=$value" >> "$GITHUB_ENV"
+          done < /home/andrej/monohull-ci/ci.env
+
+      - name: Generate per-run credentials
+        run: |
+          set -euo pipefail
+          CI_ADMIN_PASSWORD="$(openssl rand -hex 16)"
+          CI_API_KEY="$(openssl rand -hex 24)"
+          echo "::add-mask::$CI_ADMIN_PASSWORD"
+          echo "::add-mask::$CI_API_KEY"
+          {
+            echo "CI_ADMIN_PASSWORD=$CI_ADMIN_PASSWORD"
+            echo "CI_API_KEY=$CI_API_KEY"
+            echo "CI_RUN_PROJECT=r${{ github.run_id }}"
+            echo "CI_HOST_VOLUME_ROOT=${CI_HOST_VOLUME_ROOT:-/docker/volumefs/monohull-ci}"
+          } >> "$GITHUB_ENV"
+
+      - name: Janitor (pre-run, and the whole job in cleanup-only mode)
+        run: bash ci/janitor.sh
+
+      - name: Stand up the CI Monohull instance
+        if: ${{ !inputs.cleanup-only }}
+        run: |
+          set -euo pipefail
+          docker compose -p "$COMPOSE_PROJECT" -f ci/docker-compose.ci.yml up -d --build
+          echo "Waiting for the app to answer..."
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "$CI_MONOHULL_URL/api/auth/me" || true)"
+            if [ -n "$code" ] && [ "$code" != "000" ]; then echo "up ($code)"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::Monohull CI instance never came up"; exit 1
+
+      - name: Seed profile and launch the vanilla environment
+        if: ${{ !inputs.cleanup-only }}
+        id: seed
+        run: bash ci/seed.sh
+
+      - name: Run the regression suite
+        if: ${{ !inputs.cleanup-only }}
+        run: |
+          set -euo pipefail
+          # --user maps to the runner account so nothing in the workspace ends up
+          # root-owned (which would break the next checkout's git clean).
+          docker run --rm --network host \
+            --user "$(id -u):$(id -g)" -e HOME=/tmp \
+            -v "$PWD/e2e:/e2e" -w /e2e \
+            -e BASE_URL="$CI_MONOHULL_URL" \
+            -e MONOHULL_API_KEY="$CI_API_KEY" \
+            -e CI_ENV_ID="${{ steps.seed.outputs.env_id }}" \
+            -e E2E_USERNAME=ci-admin \
+            -e E2E_PASSWORD="$CI_ADMIN_PASSWORD" \
+            -e CI=1 \
+            mcr.microsoft.com/playwright:v1.50.0-jammy \
+            bash -c "npm ci --no-audit --no-fund && npx playwright test --project=regression"
+
+      - name: Upload Playwright report
+        if: ${{ failure() && !inputs.cleanup-only }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: e2e/playwright-report
+          retention-days: 14
+
+      - name: Tear down the CI instance
+        if: ${{ always() && !inputs.cleanup-only }}
+        run: docker compose -p "$COMPOSE_PROJECT" -f ci/docker-compose.ci.yml down -v || true
+
+      - name: Janitor (post-run)
+        if: ${{ always() }}
+        run: bash ci/janitor.sh

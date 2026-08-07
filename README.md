@@ -111,6 +111,7 @@ Everything is environment-variable driven; the important ones:
 | `MONOHULL_ADMIN_USERNAME` / `MONOHULL_ADMIN_PASSWORD` | Initial login seeded on first boot | `admin` / *(set one!)* |
 | `MONOHULL_API_KEY` | Static bearer key for full API access (CLI/CI/automation); empty disables | *(empty)* |
 | `MONOHULL_NETWORK_SUBNET_POOL` | /16 block carved into per-environment /24 networks | `10.100.0.0/16` |
+| `MONOHULL_PORTS_RANGE_START` / `MONOHULL_PORTS_RANGE_END` | Host-port range for dynamic environment ports; a second instance on the same host needs its own range | `12000` / `12999` |
 | `MONOHULL_MAXIMO_DOMAIN` | Base domain for per-environment public Maximo URLs (reverse-proxy labels); empty = LAN-only | *(empty)* |
 | `MONOHULL_PUBLIC_BASE_URL` | Public URL Monohull itself is reachable at (webhook rendering) | *(empty)* |
 | `MONOHULL_PR_BUILDS_MAX_CONCURRENT` | Concurrent PR builds cap | `2` |
