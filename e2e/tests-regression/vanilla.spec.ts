@@ -76,17 +76,38 @@ test.describe('vanilla Maximo regression', () => {
     const maximoHost = new URL(BASE_URL).hostname
     const maximo = `http://${maximoHost}:${config.appHttpPort}`
 
+    // Maximo can still be settling right after RUNNING: the pipeline's last step
+    // swaps server.xml (Liberty hot-reloads it), and MXServer finishes its own
+    // init after the UI war first serves (a 500/BMXAA7901E window of a couple of
+    // minutes). Judge "serves within a settle window", not a single request.
     const anon = await pwRequest.newContext()
     try {
-      const ui = await anon.get(`${maximo}/maximo/`, { maxRedirects: 5, timeout: 60_000 })
-      expect(ui.status(), `${maximo}/maximo/ should serve the UI`).toBe(200)
+      const settleDeadline = Date.now() + 10 * 60_000
+      let uiStatus = 0
+      for (;;) {
+        try {
+          const ui = await anon.get(`${maximo}/maximo/`, { maxRedirects: 5, timeout: 60_000 })
+          uiStatus = ui.status()
+        } catch { uiStatus = 0 /* connection refused while Liberty restarts */ }
+        if (uiStatus === 200 || Date.now() > settleDeadline) break
+        await new Promise(resolve => setTimeout(resolve, 15_000))
+      }
+      expect(uiStatus, `${maximo}/maximo/ should serve the UI within the settle window`).toBe(200)
 
       const maxauth = Buffer.from(`maxadmin:${MAXADMIN_PASSWORD}`).toString('base64')
-      const whoami = await anon.get(`${maximo}/maximo/oslc/whoami`, {
-        headers: { maxauth },
-        timeout: 60_000,
-      })
-      expect(whoami.status(), 'oslc/whoami with maxauth should authenticate').toBe(200)
+      let whoamiStatus = 0
+      for (;;) {
+        try {
+          const whoami = await anon.get(`${maximo}/maximo/oslc/whoami`, {
+            headers: { maxauth },
+            timeout: 60_000,
+          })
+          whoamiStatus = whoami.status()
+        } catch { whoamiStatus = 0 }
+        if (whoamiStatus === 200 || Date.now() > settleDeadline) break
+        await new Promise(resolve => setTimeout(resolve, 15_000))
+      }
+      expect(whoamiStatus, 'oslc/whoami with maxauth should authenticate within the settle window').toBe(200)
     } finally {
       await anon.dispose()
     }
