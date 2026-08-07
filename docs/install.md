@@ -186,6 +186,7 @@ variables. The most commonly set variables:
 | `MONOHULL_MAXIMO_DOMAIN` | *(empty)* | Base domain for per-environment public Maximo URLs (e.g. `maximo.example.com`). Empty ⇒ LAN-only, no public routing. |
 | `MONOHULL_PUBLIC_BASE_URL` | *(empty)* | Public URL Monohull itself is reachable at (e.g. `https://monohull.example.com`), used to render the PR-build webhook URL. |
 | `MONOHULL_NETWORK_SUBNET_POOL` | `10.100.0.0/16` | `/16` block Monohull carves per-environment `/24` networks from. Must not overlap the host LAN or other cluster networks. |
+| `MONOHULL_PORTS_RANGE_START` / `MONOHULL_PORTS_RANGE_END` | `12000` / `12999` | Host-port range for dynamically allocated environment ports. Checked against this instance's database only — a second Monohull instance on the same Docker host must use its own, non-overlapping range. |
 | `MONOHULL_PR_BUILDS_MAX_CONCURRENT` | `2` | Max concurrent per-pull-request builds; extra builds queue. |
 | `MONOHULL_PR_BUILDS_WORKSPACE_ROOT` | `/docker/volumefs/pr-builds` | Root for per-PR checkouts. Must be on a host-mounted volume so the path resolves for bind mounts. |
 | `MONOHULL_API_KEY` | *(empty)* | Static bearer key for full service-to-service API access (used by CLI/CI callers; exempt from CSRF). Empty disables API-key auth. |

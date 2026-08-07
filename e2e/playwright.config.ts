@@ -24,7 +24,18 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testDir: './tests',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      // Post-merge Maximo regression against a real environment (ci/ harness).
+      // API-only, driven by MONOHULL_API_KEY + CI_ENV_ID; skips itself when those
+      // are absent, so a plain `npx playwright test` stays fast. A real vanilla
+      // build takes tens of minutes - no retries, one enormous timeout.
+      name: 'regression',
+      testDir: './tests-regression',
+      timeout: 90 * 60_000,
+      retries: 0,
     },
   ],
 })

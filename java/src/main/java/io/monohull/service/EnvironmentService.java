@@ -43,6 +43,16 @@ public class EnvironmentService {
     @Value("${monohull.public.maximo-domain:}")
     private String maximoDomain;
 
+    // Host-port range for dynamically allocated environment ports. Allocation is
+    // collision-checked against THIS instance's database only, never the live
+    // daemon — so a second Monohull instance sharing the Docker host (e.g. a CI
+    // instance) must run with its own, non-overlapping range.
+    @Value("${monohull.ports.range-start:12000}")
+    private int portRangeStart;
+
+    @Value("${monohull.ports.range-end:12999}")
+    private int portRangeEnd;
+
     public EnvironmentService(EnvironmentRepository envRepo, ContainerRepository containerRepo,
                               EnvironmentConfigRepository configRepo, BuildLogRepository logRepo,
                               ImageConfigRepository imageConfigRepo,
@@ -604,8 +614,12 @@ public class EnvironmentService {
     }
 
     private int[] allocateDynamicPorts(int count) {
-        int rangeStart = 12000;
-        int rangeEnd = 12999;
+        int rangeStart = portRangeStart;
+        int rangeEnd = portRangeEnd;
+        if (rangeStart <= 0 || rangeEnd <= 0 || rangeStart > rangeEnd) {
+            throw new IllegalStateException("Invalid dynamic port range " + rangeStart + "-" + rangeEnd
+                + " (monohull.ports.range-start/range-end)");
+        }
 
         java.util.Set<Integer> used = new java.util.HashSet<>();
         used.addAll(configRepo.findAllUsedAppHttpPorts());
