@@ -113,8 +113,39 @@ public class DockerService {
             }
             cmd.withAuthConfig(auth);
         }
-        cmd.start().awaitCompletion(20, TimeUnit.MINUTES);
+        try {
+            cmd.start().awaitCompletion(20, TimeUnit.MINUTES);
+        } catch (RuntimeException pullFailed) {
+            // The pull is a freshness refresh, not a precondition: when the registry
+            // is unreachable (host down, DNS gone, auth endpoint dead) a build must
+            // still be able to run from the local image cache. Only a genuinely
+            // absent image is fatal. Found the hard way: the registry host died and
+            // every build failed even though all its images were already local.
+            if (imageExistsLocally(image)) {
+                logger.accept("Registry pull failed (" + firstLine(pullFailed)
+                    + ") - using locally cached image: " + image);
+                return;
+            }
+            throw pullFailed;
+        }
         logger.accept("Pulled image: " + image);
+    }
+
+    private boolean imageExistsLocally(String image) {
+        try {
+            docker.inspectImageCmd(image).exec();
+            return true;
+        } catch (NotFoundException absent) {
+            return false;
+        }
+    }
+
+    private static String firstLine(Throwable t) {
+        String message = t.getMessage();
+        if (message == null || message.isBlank()) {
+            return t.getClass().getSimpleName();
+        }
+        return message.strip().split("\n", 2)[0];
     }
 
     /**
