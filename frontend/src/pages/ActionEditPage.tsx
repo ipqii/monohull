@@ -13,6 +13,7 @@ import {
   getImageConfigs, getEnvironments, CustomAction, CreateCustomActionRequest,
 } from '../api/client'
 import { formToYaml, yamlToForm, scopeFromForm, applyScopeToForm, ScopeValue } from '../utils/actionYaml'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const emptyForm: CreateCustomActionRequest = {
   name: '', targetRole: 'ADM', command: '', executionType: 'EXEC',
@@ -95,6 +96,7 @@ export default function ActionEditPage() {
   const [mode, setMode] = useState<'form' | 'yaml'>('form')
   const [yamlText, setYamlText] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
 
   const { data: actions = [], isLoading } = useQuery({ queryKey: ['customActions'], queryFn: getCustomActions })
   const { data: imageConfigs = [] } = useQuery({ queryKey: ['imageConfigs'], queryFn: getImageConfigs })
@@ -206,7 +208,10 @@ export default function ActionEditPage() {
   }
 
   const handleLeave = () => {
-    if (isDirty && !window.confirm('Discard unsaved changes?')) return
+    if (isDirty) {
+      setConfirmLeaveOpen(true)
+      return
+    }
     navigate('/config/actions')
   }
 
@@ -457,6 +462,18 @@ export default function ActionEditPage() {
           </Box>
         </Box>
       )}
+
+      <ConfirmDialog
+        open={confirmLeaveOpen}
+        title="Discard unsaved changes?"
+        message="Your edits to this action are lost if you leave without saving."
+        confirmLabel="Discard"
+        onConfirm={() => {
+          setConfirmLeaveOpen(false)
+          navigate('/config/actions')
+        }}
+        onClose={() => setConfirmLeaveOpen(false)}
+      />
     </>
   )
 }

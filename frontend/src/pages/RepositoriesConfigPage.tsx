@@ -19,6 +19,7 @@ import {
   ConnectedRepository, ConnectedRepositoryRequest, RepoProvider, RepoBuildMode, RepoAuthMethod,
 } from '../api/client'
 import PrBuildsDialog from '../components/PrBuildsDialog'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const PROVIDERS: { value: RepoProvider; label: string }[] = [
   { value: 'GITHUB', label: 'GitHub' },
@@ -105,6 +106,7 @@ export default function RepositoriesConfigPage() {
   const [form, setForm] = useState<ConnectedRepositoryRequest>(emptyForm)
   const [formError, setFormError] = useState<string | null>(null)
   const [buildsRepo, setBuildsRepo] = useState<{ id: number; name: string } | null>(null)
+  const [repoToDelete, setRepoToDelete] = useState<{ id: number; name: string } | null>(null)
 
   const { data: repos = [], isLoading, error } = useQuery({ queryKey: ['repositories'], queryFn: getRepositories })
   const { data: imageConfigs = [] } = useQuery({ queryKey: ['imageConfigs'], queryFn: getImageConfigs })
@@ -206,7 +208,7 @@ export default function RepositoriesConfigPage() {
                 <Button size="small" variant="outlined" startIcon={<HistoryIcon sx={{ fontSize: '16px !important' }} />} onClick={() => setBuildsRepo({ id: r.id, name: r.name })}>Builds</Button>
                 <Button size="small" variant="outlined" startIcon={<EditIcon sx={{ fontSize: '16px !important' }} />} onClick={() => openEdit(r)}>Edit</Button>
                 <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon sx={{ fontSize: '16px !important' }} />}
-                  onClick={() => { if (window.confirm(`Disconnect "${r.name}"? This removes its PR build history.`)) deleteMut.mutate(r.id) }}>
+                  onClick={() => setRepoToDelete({ id: r.id, name: r.name })}>
                   Delete
                 </Button>
               </CardActions>
@@ -309,6 +311,18 @@ export default function RepositoriesConfigPage() {
 
       <PrBuildsDialog open={!!buildsRepo} onClose={() => setBuildsRepo(null)}
         repoId={buildsRepo?.id ?? null} repoName={buildsRepo?.name ?? ''} />
+
+      <ConfirmDialog
+        open={repoToDelete !== null}
+        title={`Disconnect "${repoToDelete?.name}"?`}
+        message="The connection and its PR build history are removed. The git repository itself is not touched."
+        confirmLabel="Disconnect"
+        onConfirm={() => {
+          if (repoToDelete) deleteMut.mutate(repoToDelete.id)
+          setRepoToDelete(null)
+        }}
+        onClose={() => setRepoToDelete(null)}
+      />
     </>
   )
 }

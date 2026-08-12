@@ -27,6 +27,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import yaml from 'js-yaml'
 import ActionDefinitionLink from '../components/ActionDefinitionLink'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface PipelineStepLocal {
   instanceId: string
@@ -278,6 +279,7 @@ export default function PipelinesPage() {
   const [editorMode, setEditorMode] = useState<EditorMode>('form')
   const [yamlText, setYamlText] = useState('')
   const [yamlError, setYamlError] = useState<string | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -470,9 +472,7 @@ export default function PipelinesPage() {
 
   const handleDelete = () => {
     if (!selectedPipelineId) return
-    if (window.confirm(`Delete pipeline "${pipelineName}"?`)) {
-      deleteMutation.mutate(selectedPipelineId as number)
-    }
+    setConfirmDeleteOpen(true)
   }
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -800,6 +800,18 @@ export default function PipelinesPage() {
           )}
         </DragOverlay>
       </DndContext>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title={`Delete pipeline "${pipelineName}"?`}
+        message="The pipeline and its steps are permanently deleted. The actions it references are kept."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          setConfirmDeleteOpen(false)
+          if (selectedPipelineId) deleteMutation.mutate(selectedPipelineId as number)
+        }}
+        onClose={() => setConfirmDeleteOpen(false)}
+      />
     </>
   )
 }
