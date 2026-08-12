@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   Typography, Box, Button, Card, CardContent, CardActions,
   Grid, Stack, Dialog, DialogTitle, DialogContent, DialogActions, Alert,
-  Chip, Skeleton, FormControlLabel, Switch, useMediaQuery, useTheme,
+  Chip, Skeleton, FormControlLabel, Switch, useMediaQuery, useTheme, Snackbar,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/AddRounded'
 import EditIcon from '@mui/icons-material/EditRounded'
@@ -16,6 +16,7 @@ import {
   exportImageConfigBundle, importImageConfigBundle, BundleImportResult, BundleConflictResponse,
 } from '../api/client'
 import { AxiosError } from 'axios'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 export default function ImageConfigPage() {
   const queryClient = useQueryClient()
@@ -40,6 +41,8 @@ export default function ImageConfigPage() {
   const [importBusy, setImportBusy] = useState(false)
   const [importResult, setImportResult] = useState<BundleImportResult | null>(null)
   const [importError, setImportError] = useState<{ message: string; conflicts: string[] } | null>(null)
+  const [configToDelete, setConfigToDelete] = useState<{ id: number; label: string } | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const handleExportBundle = async (id: number) => {
     try {
@@ -47,7 +50,7 @@ export default function ImageConfigPage() {
       downloadYaml(yaml, filename)
     } catch (e) {
       const ax = e as AxiosError<{ error?: string }>
-      window.alert('Export failed: ' + (ax.response?.data?.error ?? ax.message))
+      setExportError('Export failed: ' + (ax.response?.data?.error ?? ax.message))
     }
   }
 
@@ -214,11 +217,7 @@ export default function ImageConfigPage() {
                   variant="outlined"
                   color="error"
                   startIcon={<DeleteIcon sx={{ fontSize: '16px !important' }} />}
-                  onClick={() => {
-                    if (window.confirm(`Delete image config "${c.client} / ${c.project} / ${c.maximoVersion}"?`)) {
-                      deleteMutation.mutate(c.id)
-                    }
-                  }}
+                  onClick={() => setConfigToDelete({ id: c.id, label: `${c.client} / ${c.project} / ${c.maximoVersion}` })}
                 >
                   Delete
                 </Button>
@@ -294,6 +293,22 @@ export default function ImageConfigPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={configToDelete !== null}
+        title={`Delete image config "${configToDelete?.label}"?`}
+        message="The configuration template is permanently deleted. Environments already built from it are not affected."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (configToDelete) deleteMutation.mutate(configToDelete.id)
+          setConfigToDelete(null)
+        }}
+        onClose={() => setConfigToDelete(null)}
+      />
+
+      <Snackbar open={exportError !== null} autoHideDuration={6000} onClose={() => setExportError(null)}>
+        <Alert severity="error" variant="filled" onClose={() => setExportError(null)}>{exportError}</Alert>
+      </Snackbar>
     </>
   )
 }

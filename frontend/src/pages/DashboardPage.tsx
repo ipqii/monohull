@@ -15,6 +15,7 @@ import { getEnvironments, stopEnvironment, startEnvironment, deleteEnvironment }
 import ContainerStatusBadge from '../components/ContainerStatusBadge'
 import BuildForm from '../components/BuildForm'
 import ProfileLauncher from '../components/ProfileLauncher'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const statusBorderColor: Record<string, string> = {
   RUNNING: '#22c55e',
@@ -30,6 +31,7 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const [formOpen, setFormOpen] = useState(false)
   const [launcherOpen, setLauncherOpen] = useState(false)
+  const [envToRemove, setEnvToRemove] = useState<{ id: number; name: string } | null>(null)
 
   const { data: environments = [], isLoading, error } = useQuery({
     queryKey: ['environments'],
@@ -219,11 +221,7 @@ export default function DashboardPage() {
                 <Tooltip title="Remove" placement="top">
                   <IconButton
                     size="small"
-                    onClick={() => {
-                      if (window.confirm(`Remove environment "${env.name}"? This will stop and remove all containers.`)) {
-                        deleteMutation.mutate(env.id)
-                      }
-                    }}
+                    onClick={() => setEnvToRemove({ id: env.id, name: env.name })}
                     sx={{ color: '#64748b', '&:hover': { color: '#ef4444' } }}
                   >
                     <DeleteIcon fontSize="small" />
@@ -237,6 +235,16 @@ export default function DashboardPage() {
 
       <BuildForm open={formOpen} onClose={() => setFormOpen(false)} />
       <ProfileLauncher open={launcherOpen} onClose={() => setLauncherOpen(false)} />
+      <ConfirmDialog
+        open={envToRemove !== null}
+        title={`Remove environment "${envToRemove?.name}"?`}
+        message="This permanently removes its containers, Docker network, database volume, and the host directory holding its config and logs."
+        onConfirm={() => {
+          if (envToRemove) deleteMutation.mutate(envToRemove.id)
+          setEnvToRemove(null)
+        }}
+        onClose={() => setEnvToRemove(null)}
+      />
     </>
   )
 }

@@ -35,6 +35,7 @@ import ContainerLogsDialog from '../components/ContainerLogsDialog'
 import ContainerTerminalDialog from '../components/ContainerTerminalDialog'
 import ContainerExtrasEditor from '../components/ContainerExtrasEditor'
 import ActionDefinitionLink from '../components/ActionDefinitionLink'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { ExtraBind, ExtraEnvVar } from '../api/client'
 import { useLogStream } from '../hooks/useLogStream'
 
@@ -517,6 +518,7 @@ export default function EnvironmentDetailPage() {
   const [expandedExecId, setExpandedExecId] = useState<string | null>(null)
   const [logsContainer, setLogsContainer] = useState<{ id: number; name: string } | null>(null)
   const [terminalContainer, setTerminalContainer] = useState<{ id: number; name: string } | null>(null)
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false)
 
   const { data: env, isLoading, error } = useQuery({
     queryKey: ['environment', envId],
@@ -726,9 +728,7 @@ export default function EnvironmentDetailPage() {
               variant="outlined"
               color="error"
               size="small"
-              onClick={() => {
-                if (window.confirm('Remove this environment?')) deleteEnvMutation.mutate()
-              }}
+              onClick={() => setConfirmRemoveOpen(true)}
             >
               Remove
             </Button>
@@ -1206,6 +1206,16 @@ export default function EnvironmentDetailPage() {
         onClose={() => setTerminalContainer(null)}
         containerId={terminalContainer?.id ?? null}
         containerName={terminalContainer?.name ?? ''}
+      />
+      <ConfirmDialog
+        open={confirmRemoveOpen}
+        title={`Remove environment "${env.name}"?`}
+        message="This permanently removes its containers, Docker network, database volume, and the host directory holding its config and logs."
+        onConfirm={() => {
+          setConfirmRemoveOpen(false)
+          deleteEnvMutation.mutate()
+        }}
+        onClose={() => setConfirmRemoveOpen(false)}
       />
     </>
   )

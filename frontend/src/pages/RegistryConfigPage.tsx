@@ -14,6 +14,7 @@ import {
   getRegistryCatalog, getRegistryTags,
   RegistryCredentialRequest,
 } from '../api/client'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const emptyForm: RegistryCredentialRequest = {
   url: '', username: '', password: '', description: '',
@@ -31,6 +32,7 @@ export default function RegistryConfigPage() {
   const queryClient = useQueryClient()
   const [form, setForm] = useState<RegistryCredentialRequest>(emptyForm)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const { data: credential, isLoading } = useQuery({
     queryKey: ['registryCredential'],
@@ -92,10 +94,7 @@ export default function RegistryConfigPage() {
     saveMutation.mutate(payload)
   }
 
-  const handleDelete = () => {
-    if (!confirm('Delete the registry credential? Image pulls from this registry will fail unless the host already has them configured.')) return
-    deleteMutation.mutate()
-  }
+  const handleDelete = () => setConfirmDeleteOpen(true)
 
   return (
     <Box>
@@ -191,6 +190,18 @@ export default function RegistryConfigPage() {
       )}
 
       {!isLoading && credential && <AvailableImages registry={credential.url} />}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete the registry credential?"
+        message="Image pulls from this registry will fail unless the host already has the credentials configured."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          setConfirmDeleteOpen(false)
+          deleteMutation.mutate()
+        }}
+        onClose={() => setConfirmDeleteOpen(false)}
+      />
     </Box>
   )
 }

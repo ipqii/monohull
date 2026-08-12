@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   Typography, Box, Button, Card, CardContent, TextField, Stack, Alert,
   FormControl, InputLabel, Select, MenuItem, Skeleton, List, ListItemButton, ListItemText,
-  FormControlLabel, Switch,
+  FormControlLabel, Switch, Snackbar,
 } from '@mui/material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded'
 import DownloadIcon from '@mui/icons-material/FileDownloadOutlined'
@@ -14,6 +14,7 @@ import {
   exportImageConfigBundle, downloadYaml, ImageConfig, ImageConfigRequest,
 } from '../api/client'
 import ContainerExtrasEditor from '../components/ContainerExtrasEditor'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const emptyForm: ImageConfigRequest = {
   client: '', project: '', maximoVersion: '', appImage: '', dbImage: '', admImage: '',
@@ -113,6 +114,8 @@ export default function EnvironmentConfigEditPage() {
   const [initialized, setInitialized] = useState(!isEdit)
   const initialJson = useRef(JSON.stringify(emptyForm))
   const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const { data: configs = [], isLoading } = useQuery({ queryKey: ['imageConfigs'], queryFn: getImageConfigs })
   const { data: pipelines = [] } = useQuery({ queryKey: ['pipelines'], queryFn: getPipelines })
@@ -189,7 +192,10 @@ export default function EnvironmentConfigEditPage() {
   }
 
   const handleLeave = () => {
-    if (isDirty && !window.confirm('Discard unsaved changes?')) return
+    if (isDirty) {
+      setConfirmLeaveOpen(true)
+      return
+    }
     navigate('/config/environments')
   }
 
@@ -199,7 +205,7 @@ export default function EnvironmentConfigEditPage() {
       downloadYaml(yaml, filename)
     } catch (e) {
       const ax = e as AxiosError<{ error?: string }>
-      window.alert('Export failed: ' + (ax.response?.data?.error ?? ax.message))
+      setExportError('Export failed: ' + (ax.response?.data?.error ?? ax.message))
     }
   }
 
@@ -483,6 +489,22 @@ export default function EnvironmentConfigEditPage() {
           </Box>
         </Box>
       )}
+
+      <ConfirmDialog
+        open={confirmLeaveOpen}
+        title="Discard unsaved changes?"
+        message="Your edits to this environment config are lost if you leave without saving."
+        confirmLabel="Discard"
+        onConfirm={() => {
+          setConfirmLeaveOpen(false)
+          navigate('/config/environments')
+        }}
+        onClose={() => setConfirmLeaveOpen(false)}
+      />
+
+      <Snackbar open={exportError !== null} autoHideDuration={6000} onClose={() => setExportError(null)}>
+        <Alert severity="error" variant="filled" onClose={() => setExportError(null)}>{exportError}</Alert>
+      </Snackbar>
     </>
   )
 }

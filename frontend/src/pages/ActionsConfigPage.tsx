@@ -7,6 +7,7 @@ import EditIcon from '@mui/icons-material/EditRounded'
 import DeleteIcon from '@mui/icons-material/DeleteOutlineRounded'
 import DownloadIcon from '@mui/icons-material/FileDownloadOutlined'
 import ContentCopyIcon from '@mui/icons-material/ContentCopyRounded'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -14,10 +15,12 @@ import {
   getImageConfigs, getEnvironments, CustomAction, downloadYaml,
 } from '../api/client'
 import { actionToYaml } from '../utils/actionYaml'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 export default function ActionsConfigPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [actionToDelete, setActionToDelete] = useState<{ id: number; name: string } | null>(null)
 
   const { data: actions = [], isLoading, error } = useQuery({
     queryKey: ['customActions'],
@@ -112,11 +115,7 @@ export default function ActionsConfigPage() {
               variant="outlined"
               color="error"
               startIcon={<DeleteIcon sx={{ fontSize: '16px !important' }} />}
-              onClick={() => {
-                if (window.confirm(`Delete action "${a.name}"?`)) {
-                  deleteMutation.mutate(a.id)
-                }
-              }}
+              onClick={() => setActionToDelete({ id: a.id, name: a.name })}
             >
               Delete
             </Button>
@@ -201,6 +200,17 @@ export default function ActionsConfigPage() {
         {customActions.map(renderActionCard)}
       </Grid>
 
+      <ConfirmDialog
+        open={actionToDelete !== null}
+        title={`Delete action "${actionToDelete?.name}"?`}
+        message="The action definition is permanently deleted. Past executions stay in environment history."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (actionToDelete) deleteMutation.mutate(actionToDelete.id)
+          setActionToDelete(null)
+        }}
+        onClose={() => setActionToDelete(null)}
+      />
     </>
   )
 }
