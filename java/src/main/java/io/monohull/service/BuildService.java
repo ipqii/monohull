@@ -436,16 +436,23 @@ public class BuildService {
                                          Consumer<String> logger) {
         if (dbContainer == null || dbContainer.getDockerContainerId() == null) return;
         boolean isDb2 = dbContainer.getImage().contains("db2");
-        if (!isDb2) {
-            logger.accept("[smtp-config] Oracle SMTP property update not yet implemented; skipping.");
-            return;
-        }
         String dbName = env.getImageConfig() != null && env.getImageConfig().getDbName() != null
             ? env.getImageConfig().getDbName() : "maxdb76";
+        String script = isDb2 ? db2SmtpScript(dbName) : oracleSmtpScript(dbName);
 
-        // Write the SQL as db2inst1, then run it. Single-quoted heredoc keeps the SQL
-        // literal (no shell expansion) and avoids the quoting fight with `db2 "..."`.
-        String script = String.join("\n",
+        logger.accept("[smtp-config] Pointing Maximo SMTP properties at smtp:1025 (Mailpit)");
+        int rc = docker.execInContainer(dbContainer.getDockerContainerId(), script, null, 60, logger);
+        if (rc != 0) {
+            logger.accept("[smtp-config] Warning: SMTP property update exited with " + rc);
+        } else {
+            logger.accept("[smtp-config] Updated mail.smtp.host, mail.smtp.port, mxe.smtp.user, mxe.smtp.password");
+        }
+    }
+
+    // Write the SQL as db2inst1, then run it. Single-quoted heredoc keeps the SQL
+    // literal (no shell expansion) and avoids the quoting fight with `db2 "..."`.
+    private static String db2SmtpScript(String dbName) {
+        return String.join("\n",
             "set -e",
             "su - db2inst1 -c \"cat > /tmp/made-smtp-props.sql << 'SQL_EOF'",
             "CONNECT TO " + dbName + ";",
@@ -457,14 +464,26 @@ public class BuildService {
             "SQL_EOF",
             "db2 -tf /tmp/made-smtp-props.sql\""
         );
+    }
 
-        logger.accept("[smtp-config] Pointing Maximo SMTP properties at smtp:1025 (Mailpit)");
-        int rc = docker.execInContainer(dbContainer.getDockerContainerId(), script, null, 60, logger);
-        if (rc != 0) {
-            logger.accept("[smtp-config] Warning: SMTP property update exited with " + rc);
-        } else {
-            logger.accept("[smtp-config] Updated mail.smtp.host, mail.smtp.port, mxe.smtp.user, mxe.smtp.password");
-        }
+    // The Oracle image runs as the oracle user with sqlplus on PATH, so OS auth works
+    // directly. The Maximo schema lives in a PDB whose name matches the service name the
+    // JDBC URL uses (dbName), not the CDB root. Without this, Maximo keeps
+    // mail.smtp.host=localhost and every e-mailing cron fails; a cron that leaks a cursor
+    // per failed send can exhaust open_cursors until logins fail with ORA-01000.
+    private static String oracleSmtpScript(String dbName) {
+        return String.join("\n",
+            "set -e",
+            "sqlplus -s / as sysdba <<'SQL_EOF'",
+            "WHENEVER SQLERROR EXIT FAILURE",
+            "ALTER SESSION SET CONTAINER=" + dbName + ";",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE='smtp' WHERE PROPNAME='mail.smtp.host' AND SERVERNAME='COMMON';",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE='1025' WHERE PROPNAME='mail.smtp.port' AND SERVERNAME='COMMON';",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE=NULL, ENCRYPTEDVALUE=NULL WHERE PROPNAME IN ('mxe.smtp.user','mxe.smtp.password') AND SERVERNAME='COMMON';",
+            "COMMIT;",
+            "EXIT",
+            "SQL_EOF"
+        );
     }
 
     private void createAndStartContainer(ContainerEntity c, EnvironmentEntity env,

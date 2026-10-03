@@ -14,6 +14,8 @@ public interface CustomActionRepository extends JpaRepository<CustomActionEntity
 
     Optional<CustomActionEntity> findByActionKey(String actionKey);
 
+    List<CustomActionEntity> findByBuiltInTrue();
+
     /**
      * Returns every action visible to the given environment:
      *  - globally scoped (image_config_id IS NULL AND environment_id IS NULL)
