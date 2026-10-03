@@ -25,7 +25,7 @@ From the **Dashboard**, click **New Build**:
 
 1. **Image Configuration** — pick the template you just made (grouped by client).
 2. **Environment Name** — auto-generated as
-   `monohull-<client>-<project>-<n>`; edit if you like.
+   `<client>-<project>-<n>`; edit if you like.
 3. **Use static ports** — off by default (Monohull picks free host ports). Turn on to
    use the fixed ports from the template.
 4. **Include mock receiver** / **Include SMTP server** — optional add-on

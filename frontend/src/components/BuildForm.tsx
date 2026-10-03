@@ -95,7 +95,7 @@ export default function BuildForm({ open, onClose }: Props) {
     let cancelled = false
     getNextSequence(selectedConfig.client, selectedConfig.project).then(seq => {
       if (cancelled) return
-      const name = `monohull-${selectedConfig.client}-${selectedConfig.project}-${seq}`
+      const name = `${selectedConfig.client}-${selectedConfig.project}-${seq}`
         .toLowerCase().replace(/[^a-z0-9-]/g, '-')
       setForm(prev => ({ ...prev, name }))
     })
@@ -310,7 +310,7 @@ export default function BuildForm({ open, onClose }: Props) {
                 lineHeight: 1.6,
               },
             }}
-            placeholder={'name: monohull-client-project-1\nimageConfigId: 1\nstaticPorts: false\nincludeMock: false\nincludeSmtp: false'}
+            placeholder={'name: client-project-1\nimageConfigId: 1\nstaticPorts: false\nincludeMock: false\nincludeSmtp: false'}
           />
         )}
       </DialogContent>

@@ -14,6 +14,9 @@ public record EnvironmentResponse(
     LocalDateTime createdAt,
     LocalDateTime updatedAt,
     String publicUrl,
+    String localHostname,
+    String hostIp,
+    boolean routingProxy,
     String createdBy,
     List<ContainerResponse> containers
 ) {}

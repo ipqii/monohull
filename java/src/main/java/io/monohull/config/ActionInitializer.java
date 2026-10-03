@@ -9,6 +9,9 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Component
 public class ActionInitializer implements ApplicationRunner {
 
@@ -43,6 +46,21 @@ public class ActionInitializer implements ApplicationRunner {
             entity.setBuiltIn(true);
             customActionRepo.save(entity);
             log.info("Upserted built-in action: {}", def.getId());
+        }
+
+        // A built-in dropped from application.yml becomes a regular user action rather
+        // than lingering as an undeletable built-in. It keeps its key, so pipelines that
+        // reference it still resolve, and it can be edited, rescoped or deleted.
+        Set<String> definedKeys = actionProperties.getActions().stream()
+                .map(ActionProperties.ActionDefinition::getId)
+                .collect(Collectors.toSet());
+        for (CustomActionEntity entity : customActionRepo.findByBuiltInTrue()) {
+            if (!definedKeys.contains(entity.getActionKey())) {
+                entity.setBuiltIn(false);
+                customActionRepo.save(entity);
+                log.info("Built-in action {} is no longer defined; converted to a user action",
+                        entity.getActionKey());
+            }
         }
     }
 }

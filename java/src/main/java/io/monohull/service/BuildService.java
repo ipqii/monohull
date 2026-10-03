@@ -67,6 +67,15 @@ public class BuildService {
     @Value("${monohull.public.maximo-domain:}")
     private String maximoDomain;
 
+    // LAN hostname suffix and routing mode. In "proxy" mode the APP container is labelled
+    // for the shared Traefik at <networkName>.<host-suffix> (no port), isolating session
+    // cookies per host and giving port-less URLs. See issue #22.
+    @Value("${monohull.routing.host-suffix:}")
+    private String routingHostSuffix;
+
+    @Value("${monohull.routing.mode:port}")
+    private String routingMode;
+
     // Whether to check the database is genuinely usable before running pipeline actions:
     // that it is listening on the configured port, and that the Maximo schema is there.
     // Turn this off only when the schema is created *by* a pipeline action (e.g. a
@@ -427,16 +436,23 @@ public class BuildService {
                                          Consumer<String> logger) {
         if (dbContainer == null || dbContainer.getDockerContainerId() == null) return;
         boolean isDb2 = dbContainer.getImage().contains("db2");
-        if (!isDb2) {
-            logger.accept("[smtp-config] Oracle SMTP property update not yet implemented; skipping.");
-            return;
-        }
         String dbName = env.getImageConfig() != null && env.getImageConfig().getDbName() != null
             ? env.getImageConfig().getDbName() : "maxdb76";
+        String script = isDb2 ? db2SmtpScript(dbName) : oracleSmtpScript(dbName);
 
-        // Write the SQL as db2inst1, then run it. Single-quoted heredoc keeps the SQL
-        // literal (no shell expansion) and avoids the quoting fight with `db2 "..."`.
-        String script = String.join("\n",
+        logger.accept("[smtp-config] Pointing Maximo SMTP properties at smtp:1025 (Mailpit)");
+        int rc = docker.execInContainer(dbContainer.getDockerContainerId(), script, null, 60, logger);
+        if (rc != 0) {
+            logger.accept("[smtp-config] Warning: SMTP property update exited with " + rc);
+        } else {
+            logger.accept("[smtp-config] Updated mail.smtp.host, mail.smtp.port, mxe.smtp.user, mxe.smtp.password");
+        }
+    }
+
+    // Write the SQL as db2inst1, then run it. Single-quoted heredoc keeps the SQL
+    // literal (no shell expansion) and avoids the quoting fight with `db2 "..."`.
+    private static String db2SmtpScript(String dbName) {
+        return String.join("\n",
             "set -e",
             "su - db2inst1 -c \"cat > /tmp/made-smtp-props.sql << 'SQL_EOF'",
             "CONNECT TO " + dbName + ";",
@@ -448,14 +464,26 @@ public class BuildService {
             "SQL_EOF",
             "db2 -tf /tmp/made-smtp-props.sql\""
         );
+    }
 
-        logger.accept("[smtp-config] Pointing Maximo SMTP properties at smtp:1025 (Mailpit)");
-        int rc = docker.execInContainer(dbContainer.getDockerContainerId(), script, null, 60, logger);
-        if (rc != 0) {
-            logger.accept("[smtp-config] Warning: SMTP property update exited with " + rc);
-        } else {
-            logger.accept("[smtp-config] Updated mail.smtp.host, mail.smtp.port, mxe.smtp.user, mxe.smtp.password");
-        }
+    // The Oracle image runs as the oracle user with sqlplus on PATH, so OS auth works
+    // directly. The Maximo schema lives in a PDB whose name matches the service name the
+    // JDBC URL uses (dbName), not the CDB root. Without this, Maximo keeps
+    // mail.smtp.host=localhost and every e-mailing cron fails; a cron that leaks a cursor
+    // per failed send can exhaust open_cursors until logins fail with ORA-01000.
+    private static String oracleSmtpScript(String dbName) {
+        return String.join("\n",
+            "set -e",
+            "sqlplus -s / as sysdba <<'SQL_EOF'",
+            "WHENEVER SQLERROR EXIT FAILURE",
+            "ALTER SESSION SET CONTAINER=" + dbName + ";",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE='smtp' WHERE PROPNAME='mail.smtp.host' AND SERVERNAME='COMMON';",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE='1025' WHERE PROPNAME='mail.smtp.port' AND SERVERNAME='COMMON';",
+            "UPDATE MAXIMO.MAXPROPVALUE SET PROPVALUE=NULL, ENCRYPTEDVALUE=NULL WHERE PROPNAME IN ('mxe.smtp.user','mxe.smtp.password') AND SERVERNAME='COMMON';",
+            "COMMIT;",
+            "EXIT",
+            "SQL_EOF"
+        );
     }
 
     private void createAndStartContainer(ContainerEntity c, EnvironmentEntity env,
@@ -511,11 +539,21 @@ public class BuildService {
                 appEnv.add("MXE_DB_PASSWORD=maximo");
                 appEnv.add("MXE_DB_SCHEMAOWNER=maximo");
                 appendExtraEnv(appEnv, config != null ? config.getAppExtraEnv() : null);
-                String publicHost = (maximoDomain == null || maximoDomain.isBlank())
-                    ? null : env.getNetworkName() + "." + maximoDomain;
+                // Host the APP container is labelled for on the shared Traefik. A public
+                // domain wins (it serves the env beyond the LAN over TLS); otherwise, in
+                // proxy routing mode, use the LAN hostname so URLs lose the port.
+                String traefikHost;
+                if (maximoDomain != null && !maximoDomain.isBlank()) {
+                    traefikHost = env.getNetworkName() + "." + maximoDomain;
+                } else if ("proxy".equalsIgnoreCase(routingMode)
+                        && routingHostSuffix != null && !routingHostSuffix.isBlank()) {
+                    traefikHost = env.getNetworkName() + "." + routingHostSuffix;
+                } else {
+                    traefikHost = null;
+                }
                 yield docker.runAppContainer(c.getContainerName(), c.getImage(), env.getNetworkName(),
                     httpPort, httpsPort, binds,
-                    appEnv, networkAlias, publicHost, logger);
+                    appEnv, networkAlias, traefikHost, logger);
             }
             case ADM -> {
                 List<Bind> binds = new ArrayList<>();
