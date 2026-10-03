@@ -41,6 +41,11 @@ public class ActionService {
     // pipeline re-runs can re-create the APP container if the first build failed before
     // the start-app marker fired.
     private final BuildService buildService;
+    // Our own Spring proxy. runActionAsync must be called through it: a plain this-call
+    // skips @Async, so the action ran on the request thread inside executeAction's
+    // afterCommit callback, where repository writes join the already-committed
+    // transaction and the final status update was never flushed (issue #24).
+    private final ActionService self;
 
     /** Ephemeral builder image for BUILDER-type actions, built on demand from the context
      *  shipped inside the Monohull image (same pattern as the mock-receiver). */
@@ -60,7 +65,8 @@ public class ActionService {
                          PipelineDefinitionRepository pipelineDefRepo,
                          DockerService dockerService,
                          LogSink logSink,
-                         @Lazy BuildService buildService) {
+                         @Lazy BuildService buildService,
+                         @Lazy ActionService self) {
         this.customActionRepo = customActionRepo;
         this.executionRepo = executionRepo;
         this.actionLogRepo = actionLogRepo;
@@ -72,6 +78,7 @@ public class ActionService {
         this.dockerService = dockerService;
         this.logSink = logSink;
         this.buildService = buildService;
+        this.self = self;
     }
 
     public List<ActionDefinitionResponse> getAvailableActions(Long envId) {
@@ -149,7 +156,7 @@ public class ActionService {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                runActionAsync(executionDbId, executionId, dockerContainerId,
+                self.runActionAsync(executionDbId, executionId, dockerContainerId,
                     command, workingDir, timeout, executionType, runAsUser);
             }
         });
