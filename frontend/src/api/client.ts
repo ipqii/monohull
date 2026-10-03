@@ -147,6 +147,9 @@ export interface EnvironmentResponse {
   createdAt: string
   updatedAt: string
   publicUrl: string | null
+  localHostname: string | null
+  hostIp: string | null
+  routingProxy: boolean
   containers: ContainerResponse[]
 }
 

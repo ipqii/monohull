@@ -22,9 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProfileService {
 
-    /** Environment names are {@code monohull-<client>-<project>-<n>}, matching the UI. */
-    static final String NAME_PREFIX = "monohull";
-
     private final ImageConfigRepository imageConfigRepo;
     private final EnvironmentRepository envRepo;
     private final BundleService bundleService;
@@ -97,12 +94,12 @@ public class ProfileService {
     }
 
     /**
-     * Same convention the New Build dialog uses ({@code monohull-<client>-<project>-<n>},
+     * Same convention the New Build dialog uses ({@code <client>-<project>-<n>},
      * n = 1 + count of environments for that client/project), but collision-checked: names
      * of removed environments free up while the count doesn't shrink, and vice versa.
      */
     String nextEnvironmentName(ImageConfigEntity ic) {
-        String base = sanitize(NAME_PREFIX + "-" + ic.getClient() + "-" + ic.getProject());
+        String base = sanitize(ic.getClient() + "-" + ic.getProject());
         long seq = envRepo.countByClientAndProject(ic.getClient(), ic.getProject()) + 1;
         String candidate = base + "-" + seq;
         while (envRepo.existsByName(candidate)) {

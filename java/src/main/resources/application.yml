@@ -3,6 +3,10 @@ server:
   servlet:
     session:
       cookie:
+        # Distinct from Maximo's JSESSIONID so a login to a managed env on another port of
+        # the same host cannot overwrite Monohull's own session (cookies scope by host, not
+        # port). See issue #22.
+        name: MONOHULL_SESSION
         same-site: lax
         http-only: true
 
@@ -47,6 +51,26 @@ monohull:
     # used to render the webhook URL that git providers should POST PR events to.
     # Empty => the UI prefixes the webhook path with its own origin.
     base-url: ${MONOHULL_PUBLIC_BASE_URL:}
+  routing:
+    # Per-environment LAN hostname. When set, Monohull advertises each environment at
+    # <env-name>.<host-suffix> (on its existing app port) instead of the shared host
+    # name. Browsers scope session cookies by host (not port), so giving every
+    # environment -- and Monohull itself -- its own hostname stops one Maximo login from
+    # overwriting another's (or Monohull's) session. Resolution is via DNS or a hosts
+    # file; hosts files have no wildcards, so one entry per environment is needed and the
+    # UI shows the exact line to add. Empty => fall back to the host name/IP in the URL.
+    # See issue #22.
+    host-suffix: ${MONOHULL_ROUTING_HOST_SUFFIX:}
+    # IP clients use to reach the Docker host, used only to render the copyable hosts-file
+    # line (e.g. "192.168.1.75  acme-eam-1.dockerserver"). Optional.
+    host-ip: ${MONOHULL_ROUTING_HOST_IP:}
+    # How environments are reached:
+    #   port  (default) - <env>.<host-suffix>:<app-port>. Needs only DNS/hosts resolution.
+    #   proxy           - <env>.<host-suffix> with no port. Monohull labels each app
+    #                     container for the shared Traefik and joins the Traefik network;
+    #                     a reverse proxy on :80 (Traefik directly, or the host's nginx
+    #                     forwarding to it) routes by Host header. Requires that proxy.
+    mode: ${MONOHULL_ROUTING_MODE:port}
   pr-builds:
     # Max concurrent PR builds across all connected repos; excess builds queue.
     max-concurrent: ${MONOHULL_PR_BUILDS_MAX_CONCURRENT:2}

@@ -67,6 +67,15 @@ public class BuildService {
     @Value("${monohull.public.maximo-domain:}")
     private String maximoDomain;
 
+    // LAN hostname suffix and routing mode. In "proxy" mode the APP container is labelled
+    // for the shared Traefik at <networkName>.<host-suffix> (no port), isolating session
+    // cookies per host and giving port-less URLs. See issue #22.
+    @Value("${monohull.routing.host-suffix:}")
+    private String routingHostSuffix;
+
+    @Value("${monohull.routing.mode:port}")
+    private String routingMode;
+
     // Whether to check the database is genuinely usable before running pipeline actions:
     // that it is listening on the configured port, and that the Maximo schema is there.
     // Turn this off only when the schema is created *by* a pipeline action (e.g. a
@@ -511,11 +520,21 @@ public class BuildService {
                 appEnv.add("MXE_DB_PASSWORD=maximo");
                 appEnv.add("MXE_DB_SCHEMAOWNER=maximo");
                 appendExtraEnv(appEnv, config != null ? config.getAppExtraEnv() : null);
-                String publicHost = (maximoDomain == null || maximoDomain.isBlank())
-                    ? null : env.getNetworkName() + "." + maximoDomain;
+                // Host the APP container is labelled for on the shared Traefik. A public
+                // domain wins (it serves the env beyond the LAN over TLS); otherwise, in
+                // proxy routing mode, use the LAN hostname so URLs lose the port.
+                String traefikHost;
+                if (maximoDomain != null && !maximoDomain.isBlank()) {
+                    traefikHost = env.getNetworkName() + "." + maximoDomain;
+                } else if ("proxy".equalsIgnoreCase(routingMode)
+                        && routingHostSuffix != null && !routingHostSuffix.isBlank()) {
+                    traefikHost = env.getNetworkName() + "." + routingHostSuffix;
+                } else {
+                    traefikHost = null;
+                }
                 yield docker.runAppContainer(c.getContainerName(), c.getImage(), env.getNetworkName(),
                     httpPort, httpsPort, binds,
-                    appEnv, networkAlias, publicHost, logger);
+                    appEnv, networkAlias, traefikHost, logger);
             }
             case ADM -> {
                 List<Bind> binds = new ArrayList<>();

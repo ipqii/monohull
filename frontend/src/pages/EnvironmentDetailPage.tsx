@@ -13,6 +13,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded'
 import OpenInNewIcon from '@mui/icons-material/OpenInNewRounded'
 import ContentCopyIcon from '@mui/icons-material/ContentCopyRounded'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import VisibilityIcon from '@mui/icons-material/VisibilityRounded'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOffRounded'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -182,26 +183,37 @@ function AccessRow({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function AccessCard({
-  envId, dbVendor, dbName, publicUrl, appHttpPort, appHttpsPort, dbPort, dbPassword,
+  envId, dbVendor, dbName, publicUrl, localHostname, hostIp, routingProxy, appHttpPort, appHttpsPort, dbPort, dbPassword,
 }: {
   envId: number
   dbVendor: string
   dbName: string
   publicUrl: string | null
+  localHostname: string | null
+  hostIp: string | null
+  routingProxy: boolean
   appHttpPort: number | null
   appHttpsPort: number | null
   dbPort: number | null
   dbPassword: string | null
 }) {
   const [showPassword, setShowPassword] = useState(false)
-  // Use the same hostname the user used to reach Monohull — so the LAN links work
-  // whether Monohull is local (localhost) or on a remote dockerserver (its hostname/IP).
-  const accessHost = window.location.hostname
-  const httpUrl = appHttpPort ? `http://${accessHost}:${appHttpPort}/maximo` : null
-  const httpsUrl = appHttpsPort ? `https://${accessHost}:${appHttpsPort}/maximo` : null
+  // Prefer the env's own hostname (<env>.<suffix>) when the deployment configures one:
+  // each environment then gets a distinct host, so the browser scopes its Maximo session
+  // cookie to that env and logging into one no longer evicts another's session (issue #22).
+  // Otherwise fall back to however the user reached Monohull (localhost or the shared host).
+  const accessHost = localHostname || window.location.hostname
+  // In proxy mode a reverse proxy routes <env>.<suffix> on :80, so drop the port.
+  const httpUrl = routingProxy && localHostname
+    ? `http://${localHostname}/maximo`
+    : (appHttpPort ? `http://${accessHost}:${appHttpPort}/maximo` : null)
+  const httpsUrl = routingProxy || !appHttpsPort ? null : `https://${accessHost}:${appHttpsPort}/maximo`
   // Prefer the public URL (served over 443 via Traefik + the wildcard route) when
   // the deployment advertises one; the host:port URLs are LAN/VPN-only.
   const primaryUrl = publicUrl || httpUrl || httpsUrl
+  // Line to paste into the client's hosts file so <env>.<suffix> resolves. Hosts files
+  // have no wildcards, so each environment needs its own line.
+  const hostsEntry = localHostname && hostIp ? `${hostIp}  ${localHostname}` : null
   const isOracle = dbVendor.toUpperCase() === 'ORACLE'
   const jdbcUrl = dbPort
     ? (isOracle
@@ -268,6 +280,16 @@ function AccessCard({
               {!publicUrl && httpsUrl && (
                 <AccessRow label="HTTPS">
                   <CopyChipValue value={httpsUrl} />
+                </AccessRow>
+              )}
+              {hostsEntry && (
+                <AccessRow label="Hosts entry">
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                    <CopyChipValue value={hostsEntry} />
+                    <Tooltip title="Add this line to your hosts file so the URL above resolves. One line per environment (hosts files have no wildcards)." placement="top">
+                      <InfoOutlinedIcon sx={{ fontSize: '0.95rem', color: '#64748b' }} />
+                    </Tooltip>
+                  </Box>
                 </AccessRow>
               )}
               <AccessRow label="Login">
@@ -762,6 +784,9 @@ export default function EnvironmentDetailPage() {
               dbVendor={env.dbVendor}
               dbName={env.dbName}
               publicUrl={env.publicUrl}
+              localHostname={env.localHostname}
+              hostIp={env.hostIp}
+              routingProxy={env.routingProxy}
               appHttpPort={config?.appHttpPort ?? null}
               appHttpsPort={config?.appHttpsPort ?? null}
               dbPort={config?.dbPort ?? null}

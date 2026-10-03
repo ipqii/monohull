@@ -55,7 +55,7 @@ class ProfileServiceTest {
 
     private static EnvironmentResponse envResponse(String name) {
         return new EnvironmentResponse(99L, name, "build-1", "7.6.1.3", "DB2", "maxdb76",
-            "PENDING", null, null, null, "tester", List.of());
+            "PENDING", null, null, null, null, null, false, "tester", List.of());
     }
 
     // ----- name generation -----
@@ -64,10 +64,10 @@ class ProfileServiceTest {
     void nextNameFollowsUiConventionAndSkipsTakenNames() {
         ImageConfigEntity ic = profile();
         when(envRepo.countByClientAndProject("Acme", "EAM")).thenReturn(2L);
-        when(envRepo.existsByName("monohull-acme-eam-3")).thenReturn(true);
-        when(envRepo.existsByName("monohull-acme-eam-4")).thenReturn(false);
+        when(envRepo.existsByName("acme-eam-3")).thenReturn(true);
+        when(envRepo.existsByName("acme-eam-4")).thenReturn(false);
 
-        assertThat(service.nextEnvironmentName(ic)).isEqualTo("monohull-acme-eam-4");
+        assertThat(service.nextEnvironmentName(ic)).isEqualTo("acme-eam-4");
     }
 
     // ----- launch by id -----
@@ -79,20 +79,20 @@ class ProfileServiceTest {
         ic.setLaunchIncludeMock(true);
         when(imageConfigRepo.findById(7L)).thenReturn(Optional.of(ic));
         when(envRepo.countByClientAndProject("Acme", "EAM")).thenReturn(0L);
-        when(envRepo.existsByName("monohull-acme-eam-1")).thenReturn(false);
-        when(environmentService.createEnvironment(any())).thenReturn(envResponse("monohull-acme-eam-1"));
+        when(envRepo.existsByName("acme-eam-1")).thenReturn(false);
+        when(environmentService.createEnvironment(any())).thenReturn(envResponse("acme-eam-1"));
 
         ProfileLaunchResult result = service.launch(7L);
 
         ArgumentCaptor<CreateEnvironmentRequest> captor = ArgumentCaptor.forClass(CreateEnvironmentRequest.class);
         verify(environmentService).createEnvironment(captor.capture());
         CreateEnvironmentRequest req = captor.getValue();
-        assertThat(req.name()).isEqualTo("monohull-acme-eam-1");
+        assertThat(req.name()).isEqualTo("acme-eam-1");
         assertThat(req.imageConfigId()).isEqualTo(7L);
         assertThat(req.staticPorts()).isTrue();
         assertThat(req.includeMock()).isTrue();
         assertThat(req.includeSmtp()).isFalse();
-        assertThat(result.environment().name()).isEqualTo("monohull-acme-eam-1");
+        assertThat(result.environment().name()).isEqualTo("acme-eam-1");
         assertThat(result.importResult()).isNull();
     }
 
@@ -126,7 +126,7 @@ class ProfileServiceTest {
         when(imageConfigRepo.findById(7L)).thenReturn(Optional.of(existing));
         when(envRepo.countByClientAndProject("Acme", "EAM")).thenReturn(0L);
         when(envRepo.existsByName(any())).thenReturn(false);
-        when(environmentService.createEnvironment(any())).thenReturn(envResponse("monohull-acme-eam-1"));
+        when(environmentService.createEnvironment(any())).thenReturn(envResponse("acme-eam-1"));
 
         ProfileLaunchResult result = service.launchBundle(bundle(), false);
 
@@ -146,7 +146,7 @@ class ProfileServiceTest {
         when(imageConfigRepo.findById(7L)).thenReturn(Optional.of(imported));
         when(envRepo.countByClientAndProject("Acme", "EAM")).thenReturn(0L);
         when(envRepo.existsByName(any())).thenReturn(false);
-        when(environmentService.createEnvironment(any())).thenReturn(envResponse("monohull-acme-eam-1"));
+        when(environmentService.createEnvironment(any())).thenReturn(envResponse("acme-eam-1"));
 
         ProfileLaunchResult result = service.launchBundle(bundle(), false);
 

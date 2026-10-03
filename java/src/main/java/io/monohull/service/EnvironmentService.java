@@ -43,6 +43,20 @@ public class EnvironmentService {
     @Value("${monohull.public.maximo-domain:}")
     private String maximoDomain;
 
+    // Per-env LAN hostname suffix (e.g. "dockerserver") => each env is advertised at
+    // <networkName>.<suffix> on its app port, isolating session cookies per host. See #22.
+    @Value("${monohull.routing.host-suffix:}")
+    private String routingHostSuffix;
+
+    // IP clients use to reach the Docker host; only for rendering the hosts-file line.
+    @Value("${monohull.routing.host-ip:}")
+    private String routingHostIp;
+
+    // "port" (default) or "proxy". In proxy mode the UI drops the port from the Maximo URL
+    // because a reverse proxy routes <env>.<suffix> on :80. See issue #22.
+    @Value("${monohull.routing.mode:port}")
+    private String routingMode;
+
     // Host-port range for dynamically allocated environment ports. Allocation is
     // collision-checked against THIS instance's database only, never the live
     // daemon — so a second Monohull instance sharing the Docker host (e.g. a CI
@@ -564,13 +578,38 @@ public class EnvironmentService {
         return "https://" + env.getNetworkName() + "." + maximoDomain + "/maximo";
     }
 
+    /**
+     * Per-environment LAN hostname ({@code <networkName>.<host-suffix>}), or null when no
+     * suffix is configured. Accessed on the env's existing app port, this gives each
+     * environment its own host so browsers scope session cookies to it — see issue #22.
+     */
+    private String localHostname(EnvironmentEntity env) {
+        if (routingHostSuffix == null || routingHostSuffix.isBlank() || env.getNetworkName() == null) {
+            return null;
+        }
+        return env.getNetworkName() + "." + routingHostSuffix;
+    }
+
+    /** IP for the copyable hosts-file line, or null when either the IP or the hostname is unset. */
+    private String hostIp(EnvironmentEntity env) {
+        if (routingHostIp == null || routingHostIp.isBlank() || localHostname(env) == null) {
+            return null;
+        }
+        return routingHostIp;
+    }
+
+    /** True when a reverse proxy fronts the envs, so the UI serves <env>.<suffix> without a port. */
+    private boolean routingProxy(EnvironmentEntity env) {
+        return "proxy".equalsIgnoreCase(routingMode) && localHostname(env) != null;
+    }
+
     private EnvironmentResponse toResponse(EnvironmentEntity env) {
         return new EnvironmentResponse(
             env.getId(), env.getName(), env.getBuildId(),
             env.getMaximoVersion(), env.getDbVendor().name(), resolveDbName(env),
             env.getStatus().name(),
             env.getCreatedAt(), env.getUpdatedAt(),
-            publicUrl(env), env.getCreatedBy(),
+            publicUrl(env), localHostname(env), hostIp(env), routingProxy(env), env.getCreatedBy(),
             env.getContainers().stream().map(c -> toContainerResponse(c, null)).toList()
         );
     }
@@ -581,7 +620,7 @@ public class EnvironmentService {
             env.getMaximoVersion(), env.getDbVendor().name(), resolveDbName(env),
             env.getStatus().name(),
             env.getCreatedAt(), env.getUpdatedAt(),
-            publicUrl(env), env.getCreatedBy(),
+            publicUrl(env), localHostname(env), hostIp(env), routingProxy(env), env.getCreatedBy(),
             env.getContainers().stream().map(c -> {
                 ContainerStateResponse live = null;
                 if (c.getDockerContainerId() != null) {
