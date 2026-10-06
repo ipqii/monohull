@@ -424,12 +424,60 @@ public class BuildService {
     }
 
     /**
+     * Start the SMTP container that {@link EnvironmentService#addSmtp} just recorded on an
+     * already-built environment, and point Maximo's mail properties at it, using the same
+     * steps a build uses. Logs to the environment's log so it shows in the Logs tab.
+     * Maximo only reads the mail properties at startup, so with {@code restartApp} the
+     * APP container is restarted; otherwise the log says a restart is still needed.
+     */
+    public void attachSmtpContainer(Long environmentId, boolean restartApp) {
+        EnvironmentEntity env = envRepo.findByIdWithContainersAndConfig(environmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
+        String buildId = env.getBuildId();
+        Consumer<String> logger = line -> {
+            logs.append(buildId, line);
+            persistLogLine(env, line);
+        };
+        ContainerEntity smtp = null, db = null, app = null;
+        for (ContainerEntity c : env.getContainers()) {
+            switch (c.getRole()) {
+                case SMTP -> smtp = c;
+                case DB -> db = c;
+                case APP -> app = c;
+                default -> { }
+            }
+        }
+        if (smtp == null) {
+            throw new IllegalStateException("Environment " + env.getName() + " has no SMTP container to start");
+        }
+
+        logger.accept("[smtp-add] Adding Mailpit to " + env.getName());
+        try {
+            docker.ensureNetwork(env.getNetworkName());
+            docker.pullImages(List.of(smtp.getImage()), logger);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while pulling " + smtp.getImage(), e);
+        }
+        createAndStartContainer(smtp, env, env.getConfig(), null, null, logger);
+        if (db != null && db.getDockerContainerId() != null) {
+            configureSmtpProperties(db, env, logger);
+        }
+
+        if (restartApp && app != null && app.getDockerContainerId() != null) {
+            logger.accept("[smtp-add] Restarting APP so Maximo picks up the new mail settings");
+            docker.restartContainer(app.getDockerContainerId());
+        } else {
+            logger.accept("[smtp-add] Restart the APP container for Maximo to pick up the new mail settings");
+        }
+    }
+
+    /**
      * Point Maximo's outbound mail system properties at the in-network SMTP catcher
      * (Mailpit, aliased as `smtp` on the env's bridge network). Updates MAXPROPVALUE
      * rows for the COMMON server scope so Maximo loads the new values on next startup.
      * Mailpit accepts unauthenticated SMTP, so user/password are cleared.
-     *
-     * Only DB2 is wired up here — Oracle support is a follow-up.
+     * DB2 runs the updates through the db2 CLP, Oracle through sqlplus in the Maximo PDB.
      */
     private void configureSmtpProperties(ContainerEntity dbContainer,
                                          EnvironmentEntity env,

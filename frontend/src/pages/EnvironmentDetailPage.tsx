@@ -19,7 +19,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOffRounded'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import {
-  getEnvironment, stopEnvironment, startEnvironment, deleteEnvironment,
+  getEnvironment, stopEnvironment, startEnvironment, deleteEnvironment, addSmtp,
   restartContainer, stopContainer, startContainer,
   getConfig, updateConfig, getLogHistory,
   getActions, getActionHistory, ActionDefinition, ActionExecution,
@@ -541,6 +541,7 @@ export default function EnvironmentDetailPage() {
   const [logsContainer, setLogsContainer] = useState<{ id: number; name: string } | null>(null)
   const [terminalContainer, setTerminalContainer] = useState<{ id: number; name: string } | null>(null)
   const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false)
+  const [confirmAddSmtpOpen, setConfirmAddSmtpOpen] = useState(false)
 
   const { data: env, isLoading, error } = useQuery({
     queryKey: ['environment', envId],
@@ -643,6 +644,14 @@ export default function EnvironmentDetailPage() {
     onSuccess: () => navigate('/'),
   })
 
+  const addSmtpMutation = useMutation({
+    mutationFn: () => addSmtp(envId, true),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environment', envId] })
+      queryClient.invalidateQueries({ queryKey: ['config', envId] })
+    },
+  })
+
   const restartMutation = useMutation({
     mutationFn: restartContainer,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['environment', envId] }),
@@ -736,6 +745,16 @@ export default function EnvironmentDetailPage() {
             </Stack>
           </Box>
           <Stack direction="row" spacing={1}>
+            {env.status === 'RUNNING' && !env.containers.some(c => c.role === 'SMTP') && (
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={addSmtpMutation.isPending}
+                onClick={() => setConfirmAddSmtpOpen(true)}
+              >
+                {addSmtpMutation.isPending ? 'Adding Mailpit…' : 'Add Mailpit'}
+              </Button>
+            )}
             {env.status === 'RUNNING' && (
               <Button variant="outlined" color="warning" size="small" onClick={() => stopEnvMutation.mutate()}>
                 Stop All
@@ -756,6 +775,13 @@ export default function EnvironmentDetailPage() {
             </Button>
           </Stack>
         </Box>
+        {addSmtpMutation.isError && (
+          <Alert severity="error" sx={{ mt: 2 }} onClose={() => addSmtpMutation.reset()}>
+            Adding Mailpit failed:{' '}
+            {(addSmtpMutation.error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error
+              ?? (addSmtpMutation.error as Error).message}
+          </Alert>
+        )}
       </Box>
 
       {/* Tabs */}
@@ -1241,6 +1267,18 @@ export default function EnvironmentDetailPage() {
           deleteEnvMutation.mutate()
         }}
         onClose={() => setConfirmRemoveOpen(false)}
+      />
+      <ConfirmDialog
+        open={confirmAddSmtpOpen}
+        title={`Add Mailpit to "${env.name}"?`}
+        message="This starts a Mailpit container, points Maximo's outbound mail at it, and restarts the APP container so Maximo picks up the new settings. Maximo is unavailable for a few minutes while it restarts."
+        confirmLabel="Add Mailpit"
+        confirmColor="primary"
+        onConfirm={() => {
+          setConfirmAddSmtpOpen(false)
+          addSmtpMutation.mutate()
+        }}
+        onClose={() => setConfirmAddSmtpOpen(false)}
       />
     </>
   )

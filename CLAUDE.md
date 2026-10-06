@@ -120,6 +120,7 @@ The UI uses MUI v5 with a heavily customized dark theme defined in `frontend/src
 | DELETE | `/api/environments/{id}` | Remove (stops + removes containers) |
 | POST | `/api/environments/{id}/stop` | Stop all containers |
 | POST | `/api/environments/{id}/start` | Start all containers |
+| POST | `/api/environments/{id}/smtp` | Add Mailpit to a running env built without it (`?restartApp=true` restarts APP) |
 | GET | `/api/environments/{id}/logs` | SSE live log stream |
 | GET | `/api/environments/{id}/logs/history` | Historical logs (JSON) |
 | GET | `/api/containers/{id}/status` | Live Docker inspect |

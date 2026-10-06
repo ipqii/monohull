@@ -363,6 +363,10 @@ export const createEnvironment = (req: CreateEnvironmentRequest) => api.post<Env
 export const deleteEnvironment = (id: number) => api.delete(`/environments/${id}`)
 export const stopEnvironment = (id: number) => api.post(`/environments/${id}/stop`)
 export const startEnvironment = (id: number) => api.post(`/environments/${id}/start`)
+// Adds Mailpit to an environment built without it; restartApp restarts Maximo so it
+// picks up the new mail settings (it only reads them at startup).
+export const addSmtp = (id: number, restartApp: boolean) =>
+  api.post<EnvironmentResponse>(`/environments/${id}/smtp`, null, { params: { restartApp } }).then(r => r.data)
 
 export interface SetPasswordResult { success: boolean; output: string }
 export const setMaximoUserPassword = (envId: number, loginId: string, password: string) =>

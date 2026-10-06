@@ -214,14 +214,7 @@ public class EnvironmentService {
         }
 
         if (req.includeSmtp()) {
-            ContainerEntity smtpContainer = new ContainerEntity();
-            smtpContainer.setEnvironment(env);
-            smtpContainer.setContainerName(networkName + "-smtp");
-            smtpContainer.setRole(ContainerRole.SMTP);
-            smtpContainer.setImage(smtpImage);
-            smtpContainer.setStatus(ContainerStatus.PENDING);
-            smtpContainer.setPorts(config.getSmtpHostPort() + ":1025," + config.getSmtpUiHostPort() + ":8025");
-            env.getContainers().add(smtpContainer);
+            env.getContainers().add(newSmtpContainer(env, networkName, config));
         }
 
         if (workspaceOverride != null && !workspaceOverride.isBlank()) {
@@ -374,6 +367,57 @@ public class EnvironmentService {
             return new ContainerStateResponse("pending", false, null, null);
         }
         return inspectLiveState(c.getDockerContainerId());
+    }
+
+    private ContainerEntity newSmtpContainer(EnvironmentEntity env, String networkName,
+                                             EnvironmentConfigEntity config) {
+        ContainerEntity smtpContainer = new ContainerEntity();
+        smtpContainer.setEnvironment(env);
+        smtpContainer.setContainerName(networkName + "-smtp");
+        smtpContainer.setRole(ContainerRole.SMTP);
+        smtpContainer.setImage(smtpImage);
+        smtpContainer.setStatus(ContainerStatus.PENDING);
+        smtpContainer.setPorts(config.getSmtpHostPort() + ":1025," + config.getSmtpUiHostPort() + ":8025");
+        return smtpContainer;
+    }
+
+    /**
+     * Add a Mailpit SMTP container to a running environment that was built without one,
+     * e.g. one launched from a profile whose launch defaults leave SMTP off.
+     *
+     * <p>Allocates two free host ports and records the container like createEnvironment
+     * does, then has BuildService start it and point Maximo's mail properties at it.
+     * Maximo reads those properties at startup, so they only take effect once the APP
+     * container restarts; {@code restartApp} does that as part of the call.
+     *
+     * <p>Deliberately not @Transactional: the env is persisted before BuildService runs,
+     * so BuildService's own repository calls see the new container and commit on their own.
+     * Callers fetch the result with {@link #getEnvironment} through the proxy; calling it
+     * from here would skip its read-only transaction and fail on lazy associations.
+     */
+    public void addSmtp(Long envId, boolean restartApp) {
+        EnvironmentEntity env = envRepo.findByIdWithContainersAndConfig(envId)
+            .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + envId));
+        if (env.getStatus() != EnvironmentStatus.RUNNING) {
+            throw new IllegalStateException("Environment " + env.getName() + " is " + env.getStatus()
+                + "; Mailpit can only be added to a RUNNING environment");
+        }
+        if (env.getContainers().stream().anyMatch(c -> c.getRole() == ContainerRole.SMTP)) {
+            throw new IllegalStateException("Environment " + env.getName() + " already has an SMTP container");
+        }
+        EnvironmentConfigEntity config = env.getConfig();
+        if (config == null) {
+            throw new IllegalStateException("Environment " + env.getName() + " has no configuration");
+        }
+
+        int[] ports = allocateDynamicPorts(2);
+        config.setSmtpHostPort(ports[0]);
+        config.setSmtpUiHostPort(ports[1]);
+        config.setSmtpEnabled(true);
+        env.getContainers().add(newSmtpContainer(env, env.getNetworkName(), config));
+        envRepo.save(env);
+
+        buildService.attachSmtpContainer(envId, restartApp);
     }
 
     @Transactional
