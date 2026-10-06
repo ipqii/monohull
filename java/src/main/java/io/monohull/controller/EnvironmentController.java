@@ -61,6 +61,18 @@ public class EnvironmentController {
     }
 
     /**
+     * Add a Mailpit SMTP container to a running environment built without one, and point
+     * Maximo's mail properties at it. Maximo reads those at startup, so pass
+     * {@code restartApp=true} to restart the APP container as part of the call.
+     */
+    @PostMapping("/{id}/smtp")
+    public ResponseEntity<EnvironmentResponse> addSmtp(
+            @PathVariable Long id, @RequestParam(defaultValue = "false") boolean restartApp) {
+        envService.addSmtp(id, restartApp);
+        return ResponseEntity.ok(envService.getEnvironment(id));
+    }
+
+    /**
      * Change a Maximo user's password (default MAXADMIN) on this environment's ADM
      * container. These Manage-without-MAS containers expose no UI for it — the value
      * is re-encrypted with Maximo's cryptox cipher and written to MAXUSER.
