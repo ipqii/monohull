@@ -467,6 +467,9 @@ public class ActionService {
                     // and re-check that it is ready, listening, and has a Maximo schema.
                     buildService.ensureDbContainerStarted(envId, stepLogger);
                     exitCode = 0;
+                } else if ("check-db-schema".equals(action.id())) {
+                    buildService.checkDbSchema(envId, stepLogger);
+                    exitCode = 0;
                 } else if ("start-adm".equals(action.id())) {
                     buildService.ensureAdmContainerStarted(envId, stepLogger);
                     exitCode = 0;

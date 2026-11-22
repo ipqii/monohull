@@ -17,7 +17,8 @@ These implement the standard Maximo build/configure sequence. In order, they are
 
 | Action | Role | What it does |
 |---|---|---|
-| **Start Database** | DB | Pipeline marker — creates and starts the DB container, waits for it to be ready, and checks it is listening on **DB Container Port** and has a Maximo schema. Added as the first step of any pipeline that doesn't list it. |
+| **Start Database** | DB | Pipeline marker — creates and starts the DB container, waits for it to be ready, and checks it is listening on **DB Container Port**. Added as the first step of any pipeline that doesn't list it. |
+| **Check Maximo Schema** | DB | Pipeline marker — checks the database named on the image config exists and has a Maximo schema. Added right after **Start Database** when a pipeline doesn't list it. If one of your pipeline steps restores the database, add this step after it. |
 | **Start ADM Container** | ADM | Pipeline marker — starts ADM and points `maximo.properties` at the database. Added right after **Start Database** when a pipeline doesn't list it. |
 | **Run UpdateDB Pre-Processor** | ADM | Runs Maximo's UpdateDB pre-processor. |
 | **Build EAR** | ADM | Builds the Maximo EAR + Liberty bundle and publishes it to the bind-mounted config dir. |

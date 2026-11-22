@@ -37,31 +37,53 @@ class BuildServicePipelineStepsTest {
     void prependsStartStepsToAPipelineThatPredatesThem() {
         var result = buildService.withContainerStartSteps(
             List.of(step("run-updatedb", "ADM"), step("start-app", "APP")), true, true, true);
-        assertEquals(List.of("start-db", "start-adm", "run-updatedb", "start-app"), ids(result));
+        assertEquals(List.of("start-db", "check-db-schema", "start-adm", "run-updatedb", "start-app"), ids(result));
         assertEquals("DB", result.get(0).targetRole());
-        assertEquals("ADM", result.get(1).targetRole());
+        assertEquals("DB", result.get(1).targetRole());
+        assertEquals("ADM", result.get(2).targetRole());
     }
 
     @Test
     void keepsThePlacementOfAPipelineThatListsThem() {
         var result = buildService.withContainerStartSteps(
-            List.of(step("start-db", "DB"), step("restore-db", "DB"), step("start-adm", "ADM"),
-                step("run-updatedb", "ADM")), true, true, false);
-        assertEquals(List.of("start-db", "restore-db", "start-adm", "run-updatedb"), ids(result));
+            List.of(step("start-db", "DB"), step("restore-db", "DB"), step("check-db-schema", "DB"),
+                step("start-adm", "ADM"), step("run-updatedb", "ADM")), true, true, false);
+        assertEquals(List.of("start-db", "restore-db", "check-db-schema", "start-adm", "run-updatedb"), ids(result));
     }
 
     @Test
-    void insertsStartAdmRightAfterAListedStartDb() {
+    void insertsTheSchemaCheckAndStartAdmRightAfterAListedStartDb() {
         var result = buildService.withContainerStartSteps(
             List.of(step("start-db", "DB"), step("run-updatedb", "ADM")), true, true, false);
-        assertEquals(List.of("start-db", "start-adm", "run-updatedb"), ids(result));
+        assertEquals(List.of("start-db", "check-db-schema", "start-adm", "run-updatedb"), ids(result));
+    }
+
+    @Test
+    void aPipelineThatRestoresTheDbItselfKeepsItsSchemaCheckAfterTheRestore() {
+        var result = buildService.withContainerStartSteps(
+            List.of(step("restore-sp-backup", "DB"), step("check-db-schema", "DB"),
+                step("run-updatedb", "ADM")), true, true, false);
+        assertEquals(List.of("start-db", "start-adm", "restore-sp-backup", "check-db-schema", "run-updatedb"),
+            ids(result));
+    }
+
+    @Test
+    void readsDatabaseNamesFromListDbDirectory() {
+        String out = String.join("\n",
+            " System Database Directory",
+            " Number of entries in the directory = 1",
+            "Database 1 entry:",
+            " Database alias                       = MAXIMO",
+            " Database name                        = MAXIMO",
+            " Local database directory             = /database");
+        assertEquals("MAXIMO", BuildService.parseDb2DatabaseNames(out));
     }
 
     @Test
     void dropsStartStepsForContainersTheEnvironmentDoesNotHave() {
         var result = buildService.withContainerStartSteps(
-            List.of(step("start-db", "DB"), step("start-adm", "ADM"), step("start-app", "APP")),
-            false, true, false);
+            List.of(step("start-db", "DB"), step("check-db-schema", "DB"), step("start-adm", "ADM"),
+                step("start-app", "APP")), false, true, false);
         assertEquals(List.of("start-adm"), ids(result));
     }
 }
