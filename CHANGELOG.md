@@ -6,6 +6,8 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-11-22
+
 ### Changed
 - The Maximo schema check is now its own pipeline step, **Check Maximo Schema**, instead
   of part of **Start Database**. It still runs right after Start Database by default; a
@@ -165,6 +167,7 @@ First public release.
   plain-English cause+fix messages for the common Docker/registry/in-container
   failure modes.
 
+[1.2.1]: https://github.com/ipqii/monohull/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ipqii/monohull/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ipqii/monohull/releases/tag/v1.1.0
 [1.0.2]: https://github.com/ipqii/monohull/releases/tag/v1.0.2
