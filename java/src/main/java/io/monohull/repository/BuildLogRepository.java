@@ -12,4 +12,8 @@ public interface BuildLogRepository extends JpaRepository<BuildLogEntity, Long> 
     List<BuildLogEntity> findByEnvironmentIdOrderByIdAsc(Long environmentId, Pageable pageable);
 
     long countByEnvironmentId(Long environmentId);
+
+    /** Keyset page: lines after {@code afterId}, oldest first. */
+    List<BuildLogEntity> findByEnvironmentIdAndIdGreaterThanOrderByIdAsc(Long environmentId, Long afterId,
+                                                                        Pageable pageable);
 }

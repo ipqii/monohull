@@ -20,6 +20,12 @@ function fallbackCopy(text: string) {
 interface Props {
   lines: string[]
   filename?: string
+  /**
+   * Where to download the complete log from. The viewer may hold only part of a long log (the
+   * pages loaded so far), so when the server can produce the whole thing the download button
+   * fetches it from here instead of saving what's on screen.
+   */
+  downloadUrl?: string
 }
 
 const ROW_HEIGHT = 22         // px — kept in sync with fontSize 0.8rem × lineHeight 1.65
@@ -27,7 +33,7 @@ const PADDING_TOP = 12        // matches py: 1.5 (~12px)
 const OVERSCAN = 20           // extra rows above/below the viewport
 const LINE_NUMBER_WIDTH = 56  // includes left padding + number column + right gap
 
-export default function LogViewer({ lines, filename }: Props) {
+export default function LogViewer({ lines, filename, downloadUrl }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   // "follow" = auto-scroll to bottom as new lines arrive. We mirror it into a ref so the
@@ -152,6 +158,14 @@ export default function LogViewer({ lines, filename }: Props) {
   }, [getLogText])
 
   const handleDownload = useCallback(() => {
+    if (downloadUrl) {
+      // Same-origin GET, so the session cookie goes along; the server names the file.
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = (filename || 'build-log') + '.log'
+      a.click()
+      return
+    }
     const blob = new Blob([getLogText()], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -159,7 +173,7 @@ export default function LogViewer({ lines, filename }: Props) {
     a.download = (filename || 'build-log') + '.log'
     a.click()
     URL.revokeObjectURL(url)
-  }, [getLogText, filename])
+  }, [getLogText, filename, downloadUrl])
 
   return (
     <Box

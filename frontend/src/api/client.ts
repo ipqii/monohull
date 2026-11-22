@@ -187,6 +187,8 @@ export interface ConfigResponse {
 }
 
 export interface LogLine {
+  /** build_log row id — present on environment build logs, absent on action logs. */
+  id?: number
   line: string
   timestamp: string
 }

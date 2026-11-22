@@ -360,11 +360,9 @@ public class ActionService {
 
         // Logger that streams to SSE + persists to build_log
         Consumer<String> pipelineLogger = line -> {
+            Long id = envForLog != null ? persistBuildLog(envForLog, line) : null;
             if (buildId != null) {
-                logSink.append(buildId, line);
-            }
-            if (envForLog != null) {
-                persistBuildLog(envForLog, line);
+                logSink.append(buildId, id, line);
             }
         };
 
@@ -1077,14 +1075,15 @@ public class ActionService {
         return actionLogRepo.findByExecutionIdOrderByCreatedAtAsc(execution.getId());
     }
 
-    private void persistBuildLog(EnvironmentEntity env, String line) {
+    private Long persistBuildLog(EnvironmentEntity env, String line) {
         try {
             BuildLogEntity logEntry = new BuildLogEntity();
             logEntry.setEnvironment(env);
             logEntry.setLine(line);
-            buildLogRepo.save(logEntry);
+            return buildLogRepo.save(logEntry).getId();
         } catch (Exception e) {
             log.warn("Failed to persist build log line: {}", e.getMessage());
+            return null;
         }
     }
 

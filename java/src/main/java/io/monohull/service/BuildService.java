@@ -151,10 +151,9 @@ public class BuildService {
         }
 
         String buildId = env.getBuildId();
-        Consumer<String> logger = line -> {
-            logs.append(buildId, line);
-            persistLogLine(env, line);
-        };
+        // Save first, then emit with the row id, so a viewer joining late can stitch the
+        // saved history and the live stream together without gaps or duplicates.
+        Consumer<String> logger = line -> logs.append(buildId, persistLogLine(env, line), line);
 
         String pipelineRunId = null;
         try {
@@ -598,8 +597,7 @@ public class BuildService {
             .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
         String buildId = env.getBuildId();
         Consumer<String> logger = line -> {
-            logs.append(buildId, line);
-            persistLogLine(env, line);
+            logs.append(buildId, persistLogLine(env, line), line);
         };
         ContainerEntity smtp = null, db = null, app = null;
         for (ContainerEntity c : env.getContainers()) {
@@ -1470,14 +1468,16 @@ public class BuildService {
         logger.accept("[app-wait] Log rotation not detected after " + (maxAttempts * intervalSeconds) + "s; proceeding anyway");
     }
 
-    private void persistLogLine(EnvironmentEntity env, String line) {
+    /** Save a build log line; returns its row id, or null if it could not be saved. */
+    private Long persistLogLine(EnvironmentEntity env, String line) {
         try {
             BuildLogEntity logEntry = new BuildLogEntity();
             logEntry.setEnvironment(env);
             logEntry.setLine(line);
-            logRepo.save(logEntry);
+            return logRepo.save(logEntry).getId();
         } catch (Exception e) {
             log.warn("Failed to persist log line: {}", e.getMessage());
+            return null;
         }
     }
 }
