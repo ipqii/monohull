@@ -476,6 +476,12 @@ public class EnvironmentService {
         return logRepo.findByEnvironmentIdOrderByCreatedAtAsc(environmentId);
     }
 
+    /** Saved log lines after row {@code afterId}, oldest first, at most {@code limit}. */
+    public List<BuildLogEntity> getHistoricalLogsAfter(Long environmentId, long afterId, int limit) {
+        return logRepo.findByEnvironmentIdAndIdGreaterThanOrderByIdAsc(environmentId, afterId,
+            org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
+    }
+
     public long countHistoricalLogs(Long environmentId) {
         return logRepo.countByEnvironmentId(environmentId);
     }

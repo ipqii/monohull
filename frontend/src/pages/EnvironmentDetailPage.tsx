@@ -549,11 +549,6 @@ export default function EnvironmentDetailPage() {
     refetchInterval: 5000,
   })
 
-  const { lines: liveLines } = useLogStream(
-    env ? envId : null,
-    env?.buildId ?? null
-  )
-
   // Paginated log history. The /logs/history endpoint can return millions of rows for long
   // builds, which used to OOM the browser tab. We fetch the tail first and let the user pull
   // older pages on demand.
@@ -564,20 +559,37 @@ export default function EnvironmentDetailPage() {
     oldestOffset: number
   } | null>(null)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  // The id of the newest saved line when the history was loaded. The live stream starts after
+  // it, so saved history + live lines is the whole log however late the tab was opened. Kept
+  // apart from logHistory so "Load older" doesn't reopen the stream.
+  const [streamAfterId, setStreamAfterId] = useState<number | null>(null)
 
   useEffect(() => {
     if (tab !== 2) return
     let cancelled = false
     setLogHistory(null)
+    setStreamAfterId(null)
     getLogHistory(envId, { limit: LOG_PAGE_SIZE }).then(page => {
       if (cancelled) return
       setLogHistory({ total: page.total, lines: page.lines, oldestOffset: page.offset })
+      setStreamAfterId(page.lines.length > 0 ? (page.lines[page.lines.length - 1].id ?? 0) : 0)
     }).catch(() => {
       if (cancelled) return
       setLogHistory({ total: 0, lines: [], oldestOffset: 0 })
+      setStreamAfterId(0)
     })
     return () => { cancelled = true }
   }, [tab, envId])
+
+  const { lines: liveLines } = useLogStream(
+    env && tab === 2 ? envId : null,
+    env?.buildId ?? null,
+    streamAfterId,
+  )
+  const logLines = useMemo(
+    () => [...(logHistory?.lines.map(l => l.line) ?? []), ...liveLines],
+    [logHistory, liveLines],
+  )
 
   const loadOlderLogs = async () => {
     if (!logHistory || logHistory.oldestOffset === 0 || loadingOlder) return
@@ -1072,10 +1084,10 @@ export default function EnvironmentDetailPage() {
       {/* Logs Tab */}
       {tab === 2 && (
         <Box sx={{ height: { xs: 'calc(100vh - 360px)', md: 'calc(100vh - 280px)' }, minHeight: 320, display: 'flex', flexDirection: 'column' }}>
-          {liveLines.length === 0 && logHistory && (
+          {logHistory && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontFamily: '"JetBrains Mono", monospace' }}>
-                Showing {logHistory.lines.length.toLocaleString()} of {logHistory.total.toLocaleString()} lines
+                Showing {logLines.length.toLocaleString()} of {(logHistory.total + liveLines.length).toLocaleString()} lines
                 {logHistory.oldestOffset > 0 && ` (offset ${logHistory.oldestOffset.toLocaleString()})`}
               </Typography>
               {logHistory.oldestOffset > 0 && (
@@ -1087,8 +1099,9 @@ export default function EnvironmentDetailPage() {
           )}
           <Box sx={{ flex: 1, minHeight: 0 }}>
             <LogViewer
-              lines={liveLines.length > 0 ? liveLines : (logHistory?.lines.map(l => l.line) ?? [])}
+              lines={logLines}
               filename={env?.name || 'build'}
+              downloadUrl={`/api/environments/${envId}/logs/download`}
             />
           </Box>
         </Box>

@@ -6,6 +6,14 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The Logs tab now shows the whole run log however late it is opened (#29). It used to
+  show only lines logged after the page was opened. It now loads the saved log first and
+  continues the live stream from the last line it loaded, and a browser reconnect resumes
+  from the last line received instead of skipping what was logged in between.
+- The log download button saves the environment's complete build log (new
+  `GET /api/environments/{id}/logs/download`) instead of only the lines loaded in the viewer.
+
 ## [1.2.1] — 2026-11-22
 
 ### Changed

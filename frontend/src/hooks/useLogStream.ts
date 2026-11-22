@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 
-export function useLogStream(environmentId: number | null, buildId: string | null) {
+/**
+ * Live build log for an environment.
+ *
+ * The server's live stream doesn't replay what was logged before the client connected, so a
+ * caller that also shows saved history passes `afterId`: the id of the last saved line it
+ * already has. The server then sends every saved line after it before switching to live
+ * output, so history + these lines is the whole log, without gaps or duplicates. The stream
+ * only opens once `afterId` is known (pass null to wait); undefined streams live lines only.
+ */
+export function useLogStream(environmentId: number | null, buildId: string | null, afterId?: number | null) {
   const [lines, setLines] = useState<string[]>([])
   const [connected, setConnected] = useState(false)
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -12,7 +21,7 @@ export function useLogStream(environmentId: number | null, buildId: string | nul
   const rafRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!environmentId || !buildId) return
+    if (!environmentId || !buildId || afterId === null) return
 
     const flush = () => {
       rafRef.current = null
@@ -22,7 +31,10 @@ export function useLogStream(environmentId: number | null, buildId: string | nul
       setLines(prev => prev.concat(batch))
     }
 
-    const es = new EventSource(`/api/environments/${environmentId}/logs`)
+    // On an automatic reconnect the browser sends Last-Event-ID, so the server resumes after
+    // the last line received rather than skipping what was logged while disconnected.
+    const query = afterId !== undefined ? `?after=${afterId}` : ''
+    const es = new EventSource(`/api/environments/${environmentId}/logs${query}`)
     eventSourceRef.current = es
     // EventSource reconnects automatically after a dropped connection — never
     // close it on the first error, or one proxy blip / server restart kills the
@@ -57,8 +69,9 @@ export function useLogStream(environmentId: number | null, buildId: string | nul
         rafRef.current = null
       }
       pendingRef.current = []
+      setLines([])
     }
-  }, [environmentId, buildId])
+  }, [environmentId, buildId, afterId])
 
   return { lines, connected }
 }
