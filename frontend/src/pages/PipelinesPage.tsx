@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   Typography, Box, Button, TextField, Alert, Paper, Stack, Chip, IconButton, Tooltip,
   FormControl, InputLabel, Select, MenuItem, SelectChangeEvent,
@@ -267,7 +268,19 @@ function DroppablePipelineArea({ tailSpace, children }: { tailSpace: number; chi
 export default function PipelinesPage() {
   const queryClient = useQueryClient()
 
-  const [selectedPipelineId, setSelectedPipelineId] = useState<number | ''>('')
+  const [selectedPipelineId, setSelectedPipelineIdState] = useState<number | ''>('')
+  // ?id=<n> opens that pipeline, so other pages can link straight to it (issue #30). The URL
+  // follows whichever pipeline is loaded, so it can be shared or reloaded.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const setSelectedPipelineId = useCallback((id: number | '') => {
+    setSelectedPipelineIdState(id)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (id === '') next.delete('id')
+      else next.set('id', String(id))
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [pipelineName, setPipelineName] = useState('')
   const [pipelineDescription, setPipelineDescription] = useState('')
   const [pipelineEnvId, setPipelineEnvId] = useState<number | null>(null)
@@ -363,6 +376,19 @@ export default function PipelinesPage() {
     )
   }
 
+  // Load the pipeline named in the URL — on arrival from a link, or on back/forward.
+  const requestedId = Number(searchParams.get('id')) || null
+  useEffect(() => {
+    if (requestedId == null || requestedId === selectedPipelineId) return
+    let cancelled = false
+    getPipeline(requestedId).then(p => { if (!cancelled) loadPipeline(p) }).catch(() => {
+      // Deleted or unknown id: fall back to a new pipeline rather than a stale URL.
+      if (!cancelled) handleNew()
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedId])
+
   const handlePipelineSelect = (e: SelectChangeEvent<number | ''>) => {
     const val = e.target.value
     if (val === '') {
@@ -415,13 +441,17 @@ export default function PipelinesPage() {
     mutationFn: createPipeline,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pipelines'] })
-      setSelectedPipelineId(data.id)
+      // Show what was stored: the server adds the container-start steps a pipeline must have.
+      loadPipeline(data)
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, req }: { id: number; req: Parameters<typeof updatePipeline>[1] }) => updatePipeline(id, req),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pipelines'] }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pipelines'] })
+      loadPipeline(data)
+    },
   })
 
   const deleteMutation = useMutation({

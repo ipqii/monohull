@@ -6,7 +6,15 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- An "open" button next to the Pipeline dropdown on the environment definition page and
+  on a running environment's Configuration tab opens the selected pipeline in a new tab
+  (#30). The Pipelines page accepts `?id=<pipeline id>` and keeps the URL in step with the
+  loaded pipeline, so a pipeline can be linked to directly.
+
 ### Fixed
+- After saving, the Pipelines page shows the pipeline as stored, including the
+  container-start steps the server adds, instead of the list as it was before saving.
 - The Logs tab now shows the whole run log however late it is opened (#29). It used to
   show only lines logged after the page was opened. It now loads the saved log first and
   continues the live stream from the last line it loaded, and a browser reconnect resumes

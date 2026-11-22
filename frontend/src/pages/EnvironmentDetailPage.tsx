@@ -31,6 +31,7 @@ import {
 } from '../api/client'
 import ContainerStatusBadge from '../components/ContainerStatusBadge'
 import ContainerActions from '../components/ContainerActions'
+import PipelineDefinitionLink from '../components/PipelineDefinitionLink'
 import LogViewer from '../components/LogViewer'
 import ContainerLogsDialog from '../components/ContainerLogsDialog'
 import ContainerTerminalDialog from '../components/ContainerTerminalDialog'
@@ -1170,6 +1171,7 @@ export default function EnvironmentDetailPage() {
                 InputProps={{ sx: { fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8rem' } }}
               />
 
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <FormControl fullWidth size="small">
                 <InputLabel>Pipeline (override)</InputLabel>
                 <Select
@@ -1188,6 +1190,8 @@ export default function EnvironmentDetailPage() {
                   ))}
                 </Select>
               </FormControl>
+              <PipelineDefinitionLink pipelineId={config.pipelineDefinitionId} />
+              </Box>
 
               <ContainerExtrasEditor
                 title="DB container extras"

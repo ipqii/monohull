@@ -13,6 +13,7 @@ import {
   getImageConfigs, createImageConfig, updateImageConfig, getPipelines,
   exportImageConfigBundle, downloadYaml, ImageConfig, ImageConfigRequest,
 } from '../api/client'
+import PipelineDefinitionLink from '../components/PipelineDefinitionLink'
 import ContainerExtrasEditor from '../components/ContainerExtrasEditor'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -393,16 +394,19 @@ export default function EnvironmentConfigEditPage() {
 
               <Section id="pipeline" title="Pipeline"
                 description="Build pipeline run when an environment of this template is created or rebuilt.">
-                <FormControl size="small" sx={{ maxWidth: { sm: 420 } }} fullWidth>
-                  <InputLabel>Pipeline</InputLabel>
-                  <Select value={form.pipelineId ?? ''} label="Pipeline"
-                    onChange={e => setForm({ ...form, pipelineId: e.target.value === '' ? null : Number(e.target.value) })}>
-                    <MenuItem value="">None</MenuItem>
-                    {pipelines.map(p => (
-                      <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: { sm: 460 } }}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Pipeline</InputLabel>
+                    <Select value={form.pipelineId ?? ''} label="Pipeline"
+                      onChange={e => setForm({ ...form, pipelineId: e.target.value === '' ? null : Number(e.target.value) })}>
+                      <MenuItem value="">None</MenuItem>
+                      {pipelines.map(p => (
+                        <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <PipelineDefinitionLink pipelineId={form.pipelineId} />
+                </Box>
               </Section>
 
               <Section id="launch" title="Launch Defaults"
