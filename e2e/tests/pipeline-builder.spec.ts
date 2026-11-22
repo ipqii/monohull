@@ -27,6 +27,13 @@ const SEEDED_NAMES = [
   'Start APP Container',
 ]
 
+/**
+ * The palette card the specs drag in. It has to be on screen when the drag starts, and the
+ * palette lists every action, built-ins first, so pick one near the top that isn't seeded above:
+ * a card near the end (Deploy Package, once) is pushed off the bottom whenever a built-in is added.
+ */
+const DRAGGED = 'Swap web.xml to dev variant'
+
 /** Fills the builder via the YAML editor — faster and less brittle than five drags. */
 async function seedSteps(page: Page) {
   await page.goto('/pipelines')
@@ -106,14 +113,14 @@ test.describe('Pipeline builder drop preview', () => {
     const boxes = await stepBoxes(page)
     const gap = boxes[2].height + 8
 
-    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.25))
+    await dragTo(page, DRAGGED, pointOn(boxes[2], 0.25))
 
     await expect.poll(() => stepShifts(page)).toEqual([0, 0, gap, gap, gap])
 
     await page.mouse.up()
 
     expect(await stepNames(page)).toEqual([
-      SEEDED_NAMES[0], SEEDED_NAMES[1], 'Deploy Package', SEEDED_NAMES[2], SEEDED_NAMES[3], SEEDED_NAMES[4],
+      SEEDED_NAMES[0], SEEDED_NAMES[1], DRAGGED, SEEDED_NAMES[2], SEEDED_NAMES[3], SEEDED_NAMES[4],
     ])
   })
 
@@ -124,7 +131,7 @@ test.describe('Pipeline builder drop preview', () => {
     const gap = boxes[2].height + 8
     const expected = [0, 0, gap, gap, gap]
 
-    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.2))
+    await dragTo(page, DRAGGED, pointOn(boxes[2], 0.2))
     await expect.poll(() => stepShifts(page)).toEqual(expected)
 
     // Two things used to make the list twitch here: an insert-before/insert-after split at the
@@ -139,7 +146,7 @@ test.describe('Pipeline builder drop preview', () => {
 
     await page.mouse.up()
     expect(await stepNames(page)).toEqual([
-      SEEDED_NAMES[0], SEEDED_NAMES[1], 'Deploy Package', SEEDED_NAMES[2], SEEDED_NAMES[3], SEEDED_NAMES[4],
+      SEEDED_NAMES[0], SEEDED_NAMES[1], DRAGGED, SEEDED_NAMES[2], SEEDED_NAMES[3], SEEDED_NAMES[4],
     ])
   })
 
@@ -151,14 +158,14 @@ test.describe('Pipeline builder drop preview', () => {
     const gap = last.height + 8
 
     // Land on the last card first, so the tail space is open, then move down into it.
-    await dragTo(page, 'Deploy Package', pointOn(last, 0.5))
+    await dragTo(page, DRAGGED, pointOn(last, 0.5))
     await expect.poll(() => stepShifts(page)).toEqual([0, 0, 0, 0, gap])
 
     await page.mouse.move(last.x + last.width / 2, last.y + last.height + 20)
     await expect.poll(() => stepShifts(page)).toEqual([0, 0, 0, 0, 0])
 
     await page.mouse.up()
-    expect(await stepNames(page)).toEqual([...SEEDED_NAMES, 'Deploy Package'])
+    expect(await stepNames(page)).toEqual([...SEEDED_NAMES, DRAGGED])
   })
 
   test('the gap closes when the pointer leaves the pipeline', async ({ page }) => {
@@ -166,7 +173,7 @@ test.describe('Pipeline builder drop preview', () => {
 
     const boxes = await stepBoxes(page)
 
-    await dragTo(page, 'Deploy Package', pointOn(boxes[2], 0.25))
+    await dragTo(page, DRAGGED, pointOn(boxes[2], 0.25))
     await expect.poll(() => stepShifts(page)).not.toEqual([0, 0, 0, 0, 0])
 
     // Back out over the palette — nothing is pending, so nothing should be displaced.
