@@ -209,14 +209,18 @@ public class BundleService {
             pe.setEnvironment(null);
             // orphanRemoval=true on @OneToMany handles deletion of old steps when we clear/re-add.
             pe.getSteps().clear();
-            if (pipeline.steps() != null) {
-                for (StepPayload sp : pipeline.steps()) {
-                    PipelineStepEntity step = new PipelineStepEntity();
-                    step.setPipeline(pe);
-                    step.setActionKey(sp.actionKey());
-                    step.setSequenceOrder(sp.sequenceOrder());
-                    pe.getSteps().add(step);
-                }
+            List<String> keys = pipeline.steps() == null ? List.of() : pipeline.steps().stream()
+                .sorted(java.util.Comparator.comparingInt(StepPayload::sequenceOrder))
+                .map(StepPayload::actionKey)
+                .toList();
+            // Bundles written before the container-start markers existed don't list them.
+            keys = PipelineMarkers.withMarkers(keys);
+            for (int i = 0; i < keys.size(); i++) {
+                PipelineStepEntity step = new PipelineStepEntity();
+                step.setPipeline(pe);
+                step.setActionKey(keys.get(i));
+                step.setSequenceOrder(i);
+                pe.getSteps().add(step);
             }
             savedPipeline = pipelineRepo.save(pe);
             pipelineOutcome = pipelineIsNew

@@ -17,9 +17,9 @@ These implement the standard Maximo build/configure sequence. In order, they are
 
 | Action | Role | What it does |
 |---|---|---|
-| **Start Database** | DB | Pipeline marker — creates and starts the DB container, waits for it to be ready, and checks it is listening on **DB Container Port**. Added as the first step of any pipeline that doesn't list it. |
-| **Check Maximo Schema** | DB | Pipeline marker — checks the database named on the image config exists and has a Maximo schema. Added right after **Start Database** when a pipeline doesn't list it. If one of your pipeline steps restores the database, add this step after it. |
-| **Start ADM Container** | ADM | Pipeline marker — starts ADM and points `maximo.properties` at the database. Added right after **Start Database** when a pipeline doesn't list it. |
+| **Start Database** | DB | Pipeline marker — creates and starts the DB container, waits for it to be ready, and checks it is listening on **DB Container Port**. Always the first step of a pipeline unless you move it. |
+| **Check Maximo Schema** | DB | Pipeline marker — checks the database named on the image config exists and has a Maximo schema. Placed right after **Start Database** by default. If one of your pipeline steps restores the database, move this step after it. |
+| **Start ADM Container** | ADM | Pipeline marker — starts ADM and points `maximo.properties` at the database. Placed after **Check Maximo Schema** by default. |
 | **Run UpdateDB Pre-Processor** | ADM | Runs Maximo's UpdateDB pre-processor. |
 | **Build EAR** | ADM | Builds the Maximo EAR + Liberty bundle and publishes it to the bind-mounted config dir. |
 | **Run Maximo UpdateDB** | ADM | Runs UpdateDB (can take 30–60+ min on industry solutions). |
@@ -32,6 +32,11 @@ These implement the standard Maximo build/configure sequence. In order, they are
 | **Restart WebSphere** | APP | Restarts the application server (a Docker-level restart). |
 | **Build Package** | BUILDER | Builds a product-addon zip from the workspace in a clean, ephemeral ant + JDK 8 container. |
 | **Deploy Package** | ADM | Unzips the built addon into `/opt/IBM/SMP/maximo` on the ADM container. |
+
+> **Start Database**, **Check Maximo Schema** and **Start ADM Container** are part of
+> every saved pipeline: Monohull writes them into existing pipelines at startup, and
+> puts back any that a saved or imported pipeline leaves out. You can move them, for
+> example the schema check after a step of your own that restores the database.
 
 > Built-ins can be edited for live experiments, but they **resync from
 > configuration at every Monohull restart** — lasting changes belong in the server

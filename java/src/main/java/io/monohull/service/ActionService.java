@@ -370,7 +370,12 @@ public class ActionService {
 
         List<ResolvedAction> orderedActions;
         try {
-            orderedActions = buildPipelineOrder(envId);
+            EnvironmentEntity envForOrder = envRepo.findByIdWithContainersAndConfig(envId)
+                .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + envId));
+            orderedActions = buildService.withContainerStartSteps(buildPipelineOrder(envId),
+                findContainerByRole(envForOrder, "DB") != null,
+                findContainerByRole(envForOrder, "ADM") != null,
+                findContainerByRole(envForOrder, "APP") != null);
         } catch (Exception e) {
             log.error("Failed to build pipeline order for env {}: {}", envId, e.getMessage());
             if (envForLog != null) {

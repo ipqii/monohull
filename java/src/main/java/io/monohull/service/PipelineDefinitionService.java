@@ -77,8 +77,18 @@ public class PipelineDefinitionService {
         entity.setEnvironment(env);
     }
 
-    private void replaceSteps(PipelineDefinitionEntity entity, List<PipelineStepRequest> steps) {
+    private void replaceSteps(PipelineDefinitionEntity entity, List<PipelineStepRequest> requested) {
         Long envId = entity.getEnvironment() != null ? entity.getEnvironment().getId() : null;
+        // Every pipeline lists the container-start markers, so the editor shows what will run.
+        List<PipelineStepRequest> sorted = requested.stream()
+            .sorted(java.util.Comparator.comparingInt(PipelineStepRequest::sequenceOrder))
+            .toList();
+        List<PipelineStepRequest> withMarkers = PipelineMarkers.withMarkers(sorted,
+            PipelineStepRequest::actionKey, k -> new PipelineStepRequest(k, 0), true, true, true);
+        List<PipelineStepRequest> steps = new java.util.ArrayList<>();
+        for (int i = 0; i < withMarkers.size(); i++) {
+            steps.add(new PipelineStepRequest(withMarkers.get(i).actionKey(), i));
+        }
         for (PipelineStepRequest stepReq : steps) {
             CustomActionEntity action = customActionRepo.findByActionKey(stepReq.actionKey())
                 .orElseThrow(() -> new IllegalArgumentException("Action not found: " + stepReq.actionKey()));

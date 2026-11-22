@@ -11,6 +11,11 @@ All notable changes to Monohull are documented here. The format follows
   of part of **Start Database**. It still runs right after Start Database by default; a
   pipeline that restores the database in a step of its own can list it after that step,
   so the restore gets to run before the check.
+- **Start Database**, **Check Maximo Schema** and **Start ADM Container** are now real
+  steps in every saved pipeline, so the Pipelines page shows them, instead of being
+  added only when a build runs. Existing pipelines get them at startup; a pipeline
+  saved or imported without them gets them back in front. Pipeline re-runs include
+  them too.
 
 ### Fixed
 - A database that doesn't exist at all (DB2 `SQL1013N`) is now reported as missing,

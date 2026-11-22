@@ -322,52 +322,18 @@ public class BuildService {
         }
     }
 
-    /** Pipeline markers whose work BuildService does inline instead of exec'ing a command. */
-    static final List<String> CONTAINER_START_STEPS =
-        List.of("start-db", "check-db-schema", "start-adm", "start-app");
-
     /**
-     * Make sure the pipeline starts the DB and ADM containers as steps of its own.
-     *
-     * <p>Saved pipeline definitions (and bundles) written before start-db / check-db-schema /
-     * start-adm existed don't list them, so they are put in front of the first step, in that
-     * order. A pipeline that does list one keeps its own placement — e.g. check-db-schema
-     * after a step that restores the database. Markers for a container the environment
-     * doesn't have are dropped, since there is nothing for them to act on.
+     * The pipeline as it runs for this environment: the container-start markers added where a
+     * definition doesn't list them, and dropped for containers the environment doesn't have.
+     * See {@link PipelineMarkers}.
      */
     List<ActionService.ResolvedAction> withContainerStartSteps(List<ActionService.ResolvedAction> ordered,
                                                                boolean hasDb, boolean hasAdm, boolean hasApp) {
-        List<ActionService.ResolvedAction> result = new ArrayList<>();
-        for (ActionService.ResolvedAction a : ordered) {
-            if ("start-db".equals(a.id()) && !hasDb) continue;
-            if ("check-db-schema".equals(a.id()) && !hasDb) continue;
-            if ("start-adm".equals(a.id()) && !hasAdm) continue;
-            if ("start-app".equals(a.id()) && !hasApp) continue;
-            result.add(a);
-        }
-        boolean listsDb = result.stream().anyMatch(a -> "start-db".equals(a.id()));
-        boolean listsSchema = result.stream().anyMatch(a -> "check-db-schema".equals(a.id()));
-        boolean listsAdm = result.stream().anyMatch(a -> "start-adm".equals(a.id()));
-        if (hasDb && !listsDb) {
-            result.add(0, markerAction("start-db", "Start Database", "DB"));
-        }
-        if (hasDb && !listsSchema) {
-            result.add(indexOf(result, "start-db") + 1, markerAction("check-db-schema", "Check Maximo Schema", "DB"));
-        }
-        if (hasAdm && !listsAdm) {
-            // After the schema check when it was added here; right after start-db otherwise
-            // (a pipeline that places check-db-schema itself wants it after its own steps).
-            int anchor = !listsSchema ? indexOf(result, "check-db-schema") : indexOf(result, "start-db");
-            result.add(anchor + 1, markerAction("start-adm", "Start ADM Container", "ADM"));
-        }
-        return result;
-    }
-
-    private static int indexOf(List<ActionService.ResolvedAction> actions, String id) {
-        for (int i = 0; i < actions.size(); i++) {
-            if (id.equals(actions.get(i).id())) return i;
-        }
-        return -1;
+        return PipelineMarkers.withMarkers(ordered, ActionService.ResolvedAction::id, id -> switch (id) {
+            case PipelineMarkers.START_DB -> markerAction(id, "Start Database", "DB");
+            case PipelineMarkers.CHECK_DB_SCHEMA -> markerAction(id, "Check Maximo Schema", "DB");
+            default -> markerAction(id, "Start ADM Container", "ADM");
+        }, hasDb, hasAdm, hasApp);
     }
 
     private ActionService.ResolvedAction markerAction(String id, String fallbackName, String role) {
