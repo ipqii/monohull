@@ -6,6 +6,16 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Starting the DB and ADM containers are now pipeline steps (**Start Database**,
+  **Start ADM Container**) instead of work done before the pipeline begins. A DB that
+  never becomes ready, isn't listening on DB Container Port, or has no Maximo schema
+  now fails the **Start Database** step in the Pipeline tab, with its own log, instead
+  of the build erroring before any pipeline step appears. Saved pipelines that don't
+  list the new steps get them added in front automatically. A pipeline re-run starts
+  the DB/ADM containers if needed and repeats the DB checks. Steps a failed build never
+  reached are now marked skipped instead of staying pending.
+
 ### Fixed
 - The per-environment `config/` and `logs/` host directories are now created on the
   **docker host** (via a short-lived helper container, like teardown already did)

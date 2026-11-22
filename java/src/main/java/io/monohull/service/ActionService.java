@@ -462,7 +462,15 @@ public class ActionService {
                 };
 
                 int exitCode;
-                if ("start-app".equals(action.id())) {
+                if ("start-db".equals(action.id())) {
+                    // Inline marker: on a re-run, create/start the DB container if needed
+                    // and re-check that it is ready, listening, and has a Maximo schema.
+                    buildService.ensureDbContainerStarted(envId, stepLogger);
+                    exitCode = 0;
+                } else if ("start-adm".equals(action.id())) {
+                    buildService.ensureAdmContainerStarted(envId, stepLogger);
+                    exitCode = 0;
+                } else if ("start-app".equals(action.id())) {
                     // The start-app marker is handled inline by BuildService during the
                     // initial build. On a pipeline re-run (e.g. after a build-ear retry),
                     // the APP container may not exist yet because the original build
@@ -785,6 +793,84 @@ public class ActionService {
             executionRepo.save(exec);
         }
         return pipelineRunId;
+    }
+
+    /** Work done inline by the build orchestrator for a pipeline marker step. */
+    @FunctionalInterface
+    public interface InlineStepWork {
+        void run(Consumer<String> stepLogger) throws Exception;
+    }
+
+    /**
+     * Look up an action by key as a ResolvedAction, e.g. so the build orchestrator can add
+     * the container-start markers to a saved pipeline definition that predates them.
+     */
+    public Optional<ResolvedAction> findResolvedAction(String actionKey) {
+        return customActionRepo.findByActionKey(actionKey).map(ca -> new ResolvedAction(
+            ca.getActionKey(), ca.getName(), ca.getTargetRole(),
+            ca.getCommand(), ca.getWorkingDir(), ca.getTimeoutSeconds(),
+            ca.getAfterAction(), ca.getExecutionType(), ca.getAllowedExitCodes(),
+            ca.getRunAsUser(), ca.isVerbose()));
+    }
+
+    /**
+     * Run a pipeline marker step whose work is done inline by BuildService (start-db,
+     * start-adm, start-app) as a real step: it goes PENDING → RUNNING → COMPLETED/FAILED,
+     * and its output is kept as that step's log as well as the build log. A failure is
+     * rethrown so the caller can stop the build.
+     */
+    public void runInlineStep(String pipelineRunId, int seqOrder, String stepName,
+                              Consumer<String> buildLogger, InlineStepWork work) throws Exception {
+        ActionExecutionEntity exec = executionRepo
+            .findByPipelineRunIdAndSequenceOrder(pipelineRunId, seqOrder).orElse(null);
+        if (exec != null) {
+            exec.setStatus(ActionExecutionStatus.RUNNING);
+            exec.setStartedAt(LocalDateTime.now());
+            exec = executionRepo.save(exec);
+        }
+        final Long execId = exec != null ? exec.getId() : null;
+        Consumer<String> stepLogger = line -> {
+            buildLogger.accept(line);
+            if (execId != null) persistActionLog(execId, line);
+        };
+
+        buildLogger.accept("[action] Action \"" + stepName + "\" started");
+        try {
+            work.run(stepLogger);
+        } catch (Exception e) {
+            if (execId != null) {
+                persistActionLog(execId, "[error] " + DockerErrors.explain(e));
+                finishInlineStep(execId, ActionExecutionStatus.FAILED, -1);
+            }
+            buildLogger.accept("[action] Action \"" + stepName + "\" FAILED");
+            throw e;
+        }
+        if (execId != null) finishInlineStep(execId, ActionExecutionStatus.COMPLETED, 0);
+        buildLogger.accept("[action] Action \"" + stepName + "\" finished");
+    }
+
+    private void finishInlineStep(Long execId, ActionExecutionStatus status, int exitCode) {
+        executionRepo.findById(execId).ifPresent(e -> {
+            e.setStatus(status);
+            e.setExitCode(exitCode);
+            e.setFinishedAt(LocalDateTime.now());
+            executionRepo.save(e);
+        });
+    }
+
+    /**
+     * Mark every step of a run that never started as SKIPPED, so a build that stopped
+     * part-way shows as failed in the Pipeline tab rather than as forever "running".
+     */
+    @Transactional
+    public void skipPendingSteps(String pipelineRunId) {
+        for (ActionExecutionEntity exec : executionRepo.findByPipelineRunIdOrderBySequenceOrderAsc(pipelineRunId)) {
+            if (exec.getStatus() == ActionExecutionStatus.PENDING) {
+                exec.setStatus(ActionExecutionStatus.SKIPPED);
+                exec.setFinishedAt(LocalDateTime.now());
+                executionRepo.save(exec);
+            }
+        }
     }
 
     /**

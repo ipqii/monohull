@@ -156,6 +156,7 @@ public class BuildService {
             persistLogLine(env, line);
         };
 
+        String pipelineRunId = null;
         try {
             env.setStatus(EnvironmentStatus.BUILDING);
             envRepo.save(env);
@@ -185,17 +186,16 @@ public class BuildService {
                 logger.accept("[workspace] Workspace path -> /workspace/" + workspaceFolderName);
             }
 
-            // Phase 1: start DB on its own and wait for it to be ready. The DB image is
-            // responsible for ensuring the Maximo database exists; we just wait for the
-            // instance/listener to come up. MOCK and SMTP addons have no dependencies and
-            // come up alongside the DB so they're ready by the time pipeline actions run.
+            // MOCK and SMTP addons have no dependencies and come up straight away so they're
+            // ready by the time pipeline actions run. DB, ADM and APP are started by pipeline
+            // steps (start-db, start-adm, start-app) so their startup and checks show up in
+            // the Pipeline tab with their own status and log, and can be retried.
             ContainerEntity dbContainer = null;
             ContainerEntity admContainer = null;
             ContainerEntity appContainer = null;
             for (ContainerEntity c : env.getContainers()) {
                 if (c.getRole() == ContainerRole.DB) {
                     dbContainer = c;
-                    createAndStartContainer(c, env, config, workspaceBindSource, workspaceFolderName, logger);
                 } else if (c.getRole() == ContainerRole.ADM) {
                     admContainer = c;
                 } else if (c.getRole() == ContainerRole.APP) {
@@ -205,55 +205,81 @@ public class BuildService {
                 }
             }
 
-            if (dbContainer != null) {
-                waitForDbReady(dbContainer, logger);
-                verifyDbListening(dbContainer, env, logger);
-                verifyMaximoSchema(dbContainer, env, logger);
-            }
-
-            env.setStatus(EnvironmentStatus.CONFIGURING);
-            envRepo.save(env);
-
-            // Phase 2: now that the DB is up, start ADM and patch maximo.properties.
-            if (admContainer != null) {
-                createAndStartContainer(admContainer, env, config, workspaceBindSource, workspaceFolderName, logger);
-                configureMaximoProperties(admContainer, imageConfig, logger);
-            }
-
-            List<ActionService.ResolvedAction> ordered = actionService.buildPipelineOrder(environmentId);
+            List<ActionService.ResolvedAction> ordered = withContainerStartSteps(
+                actionService.buildPipelineOrder(environmentId),
+                dbContainer != null, admContainer != null, appContainer != null);
             // Pre-create a PENDING execution record per step so the Pipeline tab shows the
             // full plan from the start, with each step transitioning PENDING → RUNNING →
             // COMPLETED/FAILED as it progresses (rather than appearing only when reached).
-            String pipelineRunId = actionService.preCreatePipelineExecutions(environmentId, ordered);
+            pipelineRunId = actionService.preCreatePipelineExecutions(environmentId, ordered);
 
-            // Phase 3: run pipeline actions in order. The "start-app" marker triggers
-            // the APP container start mid-stream so subsequent ADM actions that need
-            // Maximo over HTTP (dataload, etc.) find the APP container ready.
+            // Run pipeline steps in order. The start-* markers are done inline here; every
+            // other step is an action exec'd in its target container.
+            final ContainerEntity db = dbContainer;
+            final ContainerEntity adm = admContainer;
+            final ContainerEntity app = appContainer;
             int seqOrder = 0;
+            boolean dbStarted = false;
+            boolean admStarted = false;
             boolean appStarted = false;
             for (ActionService.ResolvedAction action : ordered) {
-                if ("start-app".equals(action.id())) {
-                    if (appContainer != null && !appStarted) {
-                        // Drop the JMS dropin into the Liberty config dir AFTER build-ear's
-                        // wipe so it survives, and BEFORE APP starts so Liberty loads it.
-                        writeServerCustomXml(admContainer, config, logger);
-                        // Update SMTP system properties (mail.smtp.host/port, mxe.smtp.user/password)
-                        // before Maximo starts so they're loaded fresh. Pipeline restore steps,
-                        // if any, have already run and won't overwrite our values.
-                        if (config != null && config.isSmtpEnabled()) {
-                            configureSmtpProperties(dbContainer, env, logger);
+                int seq = seqOrder++;
+                switch (action.id()) {
+                    case "start-db" -> {
+                        if (!dbStarted) {
+                            actionService.runInlineStep(pipelineRunId, seq, action.name(), logger,
+                                l -> startDbStep(db, env, config, workspaceBindSource, workspaceFolderName, l));
+                            dbStarted = true;
+                            env.setStatus(EnvironmentStatus.CONFIGURING);
+                            envRepo.save(env);
+                        } else {
+                            actionService.markStepCompleted(pipelineRunId, seq);
                         }
-                        logger.accept("[app-start] Starting APP container now that build artifacts are ready");
-                        createAndStartContainer(appContainer, env, config, workspaceBindSource, workspaceFolderName, logger);
-                        appStarted = true;
-                        waitForAppReady(appContainer, logger);
                     }
-                    actionService.markStepCompleted(pipelineRunId, seqOrder++);
-                    continue;
+                    case "start-adm" -> {
+                        if (!admStarted) {
+                            final boolean needDb = !dbStarted && db != null;
+                            actionService.runInlineStep(pipelineRunId, seq, action.name(), logger, l -> {
+                                // ADM needs the DB up (maximo.properties, UpdateDB); a pipeline
+                                // that lists start-adm before start-db still gets it in order.
+                                if (needDb) startDbStep(db, env, config, workspaceBindSource, workspaceFolderName, l);
+                                l.accept("[adm-start] Starting ADM container");
+                                createAndStartContainer(adm, env, config, workspaceBindSource, workspaceFolderName, l);
+                                configureMaximoProperties(adm, imageConfig, l);
+                            });
+                            if (needDb) dbStarted = true;
+                            admStarted = true;
+                        } else {
+                            actionService.markStepCompleted(pipelineRunId, seq);
+                        }
+                    }
+                    case "start-app" -> {
+                        if (!appStarted) {
+                            actionService.runInlineStep(pipelineRunId, seq, action.name(), logger, l -> {
+                                // Drop the JMS dropin into the Liberty config dir AFTER build-ear's
+                                // wipe so it survives, and BEFORE APP starts so Liberty loads it.
+                                writeServerCustomXml(adm, config, l);
+                                // Update SMTP system properties (mail.smtp.host/port, mxe.smtp.user/password)
+                                // before Maximo starts so they're loaded fresh. Pipeline restore steps,
+                                // if any, have already run and won't overwrite our values.
+                                if (config != null && config.isSmtpEnabled()) {
+                                    configureSmtpProperties(db, env, l);
+                                }
+                                l.accept("[app-start] Starting APP container now that build artifacts are ready");
+                                createAndStartContainer(app, env, config, workspaceBindSource, workspaceFolderName, l);
+                                waitForAppReady(app, l);
+                            });
+                            appStarted = true;
+                        } else {
+                            actionService.markStepCompleted(pipelineRunId, seq);
+                        }
+                    }
+                    default -> {
+                        boolean ok = actionService.executeSingleAction(environmentId, action.id(),
+                            pipelineRunId, seq, logger);
+                        if (!ok) throw new RuntimeException(action.id() + " failed");
+                    }
                 }
-                boolean ok = actionService.executeSingleAction(environmentId, action.id(),
-                    pipelineRunId, seqOrder++, logger);
-                if (!ok) throw new RuntimeException(action.id() + " failed");
             }
 
             // Safety net: if the pipeline omits start-app but an APP container is defined,
@@ -274,10 +300,153 @@ public class BuildService {
         } catch (Exception e) {
             log.error("Build failed for environment {}", environmentId, e);
             logger.accept("[error] " + DockerErrors.explain(e));
+            if (pipelineRunId != null) {
+                try {
+                    actionService.skipPendingSteps(pipelineRunId);
+                } catch (Exception skipErr) {
+                    log.warn("Could not mark remaining pipeline steps skipped: {}", skipErr.getMessage());
+                }
+            }
             env.setStatus(EnvironmentStatus.ERROR);
             envRepo.save(env);
         } finally {
             logs.complete(buildId);
+        }
+    }
+
+    /** Pipeline markers whose work BuildService does inline instead of exec'ing a command. */
+    static final List<String> CONTAINER_START_STEPS = List.of("start-db", "start-adm", "start-app");
+
+    /**
+     * Make sure the pipeline starts the DB and ADM containers as steps of its own.
+     *
+     * <p>Saved pipeline definitions (and bundles) written before start-db / start-adm
+     * existed don't list them, so they are put in front of the first step. A pipeline that
+     * does list them keeps its own placement. Markers for a container the environment
+     * doesn't have are dropped, since there is nothing for them to start.
+     */
+    List<ActionService.ResolvedAction> withContainerStartSteps(List<ActionService.ResolvedAction> ordered,
+                                                               boolean hasDb, boolean hasAdm, boolean hasApp) {
+        List<ActionService.ResolvedAction> result = new ArrayList<>();
+        for (ActionService.ResolvedAction a : ordered) {
+            if ("start-db".equals(a.id()) && !hasDb) continue;
+            if ("start-adm".equals(a.id()) && !hasAdm) continue;
+            if ("start-app".equals(a.id()) && !hasApp) continue;
+            result.add(a);
+        }
+        boolean listsDb = result.stream().anyMatch(a -> "start-db".equals(a.id()));
+        boolean listsAdm = result.stream().anyMatch(a -> "start-adm".equals(a.id()));
+        int insertAt = 0;
+        if (hasDb && !listsDb) {
+            result.add(insertAt++, markerAction("start-db", "Start Database", "DB"));
+        }
+        if (hasAdm && !listsAdm) {
+            int afterDb = indexOf(result, "start-db");
+            result.add(afterDb >= 0 ? afterDb + 1 : insertAt, markerAction("start-adm", "Start ADM Container", "ADM"));
+        }
+        return result;
+    }
+
+    private static int indexOf(List<ActionService.ResolvedAction> actions, String id) {
+        for (int i = 0; i < actions.size(); i++) {
+            if (id.equals(actions.get(i).id())) return i;
+        }
+        return -1;
+    }
+
+    private ActionService.ResolvedAction markerAction(String id, String fallbackName, String role) {
+        return actionService.findResolvedAction(id).orElseGet(() -> new ActionService.ResolvedAction(
+            id, fallbackName, role, ":", null, 60, null, null, null, null, false));
+    }
+
+    /**
+     * The start-db step: create and start the DB container, wait for it to be ready, and
+     * check it is listening on the configured port and has a Maximo schema. The DB image is
+     * responsible for ensuring the Maximo database exists; we just wait and verify.
+     */
+    private void startDbStep(ContainerEntity dbContainer, EnvironmentEntity env,
+                             EnvironmentConfigEntity config, String workspaceBindSource,
+                             String workspaceFolderName, Consumer<String> logger) {
+        logger.accept("[db-start] Starting DB container");
+        createAndStartContainer(dbContainer, env, config, workspaceBindSource, workspaceFolderName, logger);
+        checkDbReady(dbContainer, env, logger);
+    }
+
+    private void checkDbReady(ContainerEntity dbContainer, EnvironmentEntity env, Consumer<String> logger) {
+        waitForDbReady(dbContainer, logger);
+        verifyDbListening(dbContainer, env, logger);
+        verifyMaximoSchema(dbContainer, env, logger);
+    }
+
+    /**
+     * Idempotently bring the DB container up, for a pipeline re-run's start-db step:
+     * create it if it was never created (or its id is stale), start it if stopped, then
+     * re-run the readiness, port and schema checks either way.
+     *
+     * <p>A container that already exists keeps the ports it was created with, so after
+     * changing DB Container Port on the image config, rebuild the environment rather than
+     * re-running the pipeline.
+     */
+    public void ensureDbContainerStarted(Long environmentId, Consumer<String> logger) {
+        EnvironmentEntity env = envRepo.findByIdWithContainersAndConfig(environmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
+        ContainerEntity dbContainer = env.getContainers().stream()
+            .filter(c -> c.getRole() == ContainerRole.DB).findFirst().orElse(null);
+        if (dbContainer == null) {
+            logger.accept("[db-start] No DB container defined for env " + env.getName() + "; nothing to do");
+            return;
+        }
+        if (startExistingContainer(dbContainer, "DB", logger)) {
+            checkDbReady(dbContainer, env, logger);
+            return;
+        }
+        WorkspaceBind ws = resolveWorkspaceBind(env);
+        startDbStep(dbContainer, env, env.getConfig(),
+            ws != null ? ws.bindSource() : null, ws != null ? ws.folderName() : null, logger);
+    }
+
+    /**
+     * Idempotently bring the ADM container up, for a pipeline re-run's start-adm step.
+     * maximo.properties is patched only when the container is newly created.
+     */
+    public void ensureAdmContainerStarted(Long environmentId, Consumer<String> logger) {
+        EnvironmentEntity env = envRepo.findByIdWithContainersAndConfig(environmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
+        ContainerEntity admContainer = env.getContainers().stream()
+            .filter(c -> c.getRole() == ContainerRole.ADM).findFirst().orElse(null);
+        if (admContainer == null) {
+            logger.accept("[adm-start] No ADM container defined for env " + env.getName() + "; nothing to do");
+            return;
+        }
+        if (startExistingContainer(admContainer, "ADM", logger)) return;
+        WorkspaceBind ws = resolveWorkspaceBind(env);
+        logger.accept("[adm-start] Starting ADM container for env " + env.getName());
+        createAndStartContainer(admContainer, env, env.getConfig(),
+            ws != null ? ws.bindSource() : null, ws != null ? ws.folderName() : null, logger);
+        configureMaximoProperties(admContainer, env.getImageConfig(), logger);
+    }
+
+    /**
+     * Start a container that was already created. Returns false when it has to be created
+     * (never created, or Docker no longer knows the id).
+     */
+    private boolean startExistingContainer(ContainerEntity c, String label, Consumer<String> logger) {
+        if (c.getDockerContainerId() == null) return false;
+        String tag = "[" + label.toLowerCase() + "-start] ";
+        try {
+            var inspect = docker.inspectContainer(c.getDockerContainerId());
+            if (inspect != null && Boolean.TRUE.equals(inspect.getState().getRunning())) {
+                logger.accept(tag + label + " container already running");
+                return true;
+            }
+            logger.accept(tag + label + " container exists but is not running; starting it");
+            docker.startContainer(c.getDockerContainerId());
+            return true;
+        } catch (Exception e) {
+            logger.accept(tag + label + " container id stale (" + e.getMessage() + "); will recreate");
+            c.setDockerContainerId(null);
+            containerRepo.save(c);
+            return false;
         }
     }
 
