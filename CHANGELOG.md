@@ -6,6 +6,23 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-22
+
+### Added
+- **Add Mailpit to a running environment** built without it: an "Add Mailpit" button
+  on the environment page (and `POST /api/environments/{id}/smtp`) starts a Mailpit
+  container and points Maximo's mail properties at it, on DB2 and Oracle. With
+  `restartApp=true` the APP container is restarted so Maximo picks up the settings.
+- **Per-environment hostnames**: new `monohull.routing` settings (`host-suffix`,
+  `host-ip`, `mode`). With a host suffix each environment is served at
+  `<env>.<suffix>`, and in proxy mode its APP container is labelled for the shared
+  Traefik so URLs drop the port. The environment page shows the URL and the
+  hosts-file line to add.
+- In-app confirmation dialogs replace the browser's native `confirm()`/`alert()`, and
+  say what a destructive action actually removes.
+- Builds fall back to locally cached images when the registry is unreachable; an
+  image that isn't cached locally still fails the build with the original error.
+
 ### Changed
 - Starting the DB and ADM containers are now pipeline steps (**Start Database**,
   **Start ADM Container**) instead of work done before the pipeline begins. A DB that
@@ -15,6 +32,22 @@ All notable changes to Monohull are documented here. The format follows
   list the new steps get them added in front automatically. A pipeline re-run starts
   the DB/ADM containers if needed and repeats the DB checks. Steps a failed build never
   reached are now marked skipped instead of staying pending.
+- Monohull's own session cookie is now `MONOHULL_SESSION`, so logging into Monohull
+  no longer evicts Maximo sessions on the same host (and vice versa). Existing
+  Monohull sessions are signed out once on upgrade.
+- New environment names drop the `monohull-` prefix (`<client>-<project>-<n>`) so the
+  per-environment hostnames stay short.
+- A built-in action removed from `application.yml` becomes a regular user action with
+  the same key instead of an undeletable built-in; pipelines that reference it keep
+  working.
+
+### Fixed
+- Manually executed actions stayed RUNNING forever: their final status was never
+  saved. Pipeline steps were unaffected.
+- Oracle environments now get Maximo's SMTP properties updated like DB2 ones; before,
+  they kept `mail.smtp.host=localhost` and every e-mail send failed.
+
+## [1.1.0] — 2026-08-09
 
 ### Fixed
 - The per-environment `config/` and `logs/` host directories are now created on the
@@ -117,6 +150,8 @@ First public release.
   plain-English cause+fix messages for the common Docker/registry/in-container
   failure modes.
 
+[1.2.0]: https://github.com/ipqii/monohull/releases/tag/v1.2.0
+[1.1.0]: https://github.com/ipqii/monohull/releases/tag/v1.1.0
 [1.0.2]: https://github.com/ipqii/monohull/releases/tag/v1.0.2
 [1.0.1]: https://github.com/ipqii/monohull/releases/tag/v1.0.1
 [1.0.0]: https://github.com/ipqii/monohull/releases/tag/v1.0.0
