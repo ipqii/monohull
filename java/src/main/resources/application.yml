@@ -98,25 +98,37 @@ monohull:
     build-path: docker/maximo-builder
   actions:
     # Pipeline marker — BuildService creates and starts the DB container, waits for the
-    # image's ready marker, then checks it is listening on DB Container Port and has a
-    # Maximo schema. Saved pipelines that don't list it get it added as the first step.
-    # On a pipeline re-run it starts the DB if needed and repeats the checks.
+    # image's ready marker, then checks it is listening on DB Container Port. Saved
+    # pipelines that don't list it get it added as the first step. On a pipeline re-run
+    # it starts the DB if needed and repeats the checks.
     - id: start-db
       name: Start Database
-      description: Pipeline marker that starts the DB container and checks it is ready, listening, and has a Maximo schema.
+      description: Pipeline marker that starts the DB container and checks it is ready and listening on DB Container Port.
       targetRole: DB
       command: ":"
       timeout: 60
       autoRun: true
+    # Pipeline marker — BuildService checks the database exists and holds a Maximo
+    # schema. Added right after start-db when a pipeline omits it; a pipeline that
+    # restores the database in a step of its own lists it after that step.
+    - id: check-db-schema
+      name: Check Maximo Schema
+      description: Pipeline marker that checks the database exists and has a Maximo schema. Place it after any step that restores the database.
+      targetRole: DB
+      command: ":"
+      timeout: 120
+      afterAction: start-db
+      autoRun: true
     # Pipeline marker — BuildService creates and starts the ADM container and patches
-    # maximo.properties for the DB. Added right after start-db when a pipeline omits it.
+    # maximo.properties for the DB. Added after start-db / check-db-schema when a
+    # pipeline omits it.
     - id: start-adm
       name: Start ADM Container
       description: Pipeline marker that starts the ADM container and points maximo.properties at the database.
       targetRole: ADM
       command: ":"
       timeout: 60
-      afterAction: start-db
+      afterAction: check-db-schema
       autoRun: true
     - id: run-updatedb-preprocessor
       name: Run UpdateDB Pre-Processor

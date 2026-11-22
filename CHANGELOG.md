@@ -6,6 +6,21 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The Maximo schema check is now its own pipeline step, **Check Maximo Schema**, instead
+  of part of **Start Database**. It still runs right after Start Database by default; a
+  pipeline that restores the database in a step of its own can list it after that step,
+  so the restore gets to run before the check.
+- **Start Database**, **Check Maximo Schema** and **Start ADM Container** are now real
+  steps in every saved pipeline, so the Pipelines page shows them, instead of being
+  added only when a build runs. Existing pipelines get them at startup; a pipeline
+  saved or imported without them gets them back in front. Pipeline re-runs include
+  them too.
+
+### Fixed
+- A database that doesn't exist at all (DB2 `SQL1013N`) is now reported as missing,
+  with the databases the container does have, instead of as "has no Maximo schema".
+
 ## [1.2.0] — 2026-11-22
 
 ### Added

@@ -370,7 +370,12 @@ public class ActionService {
 
         List<ResolvedAction> orderedActions;
         try {
-            orderedActions = buildPipelineOrder(envId);
+            EnvironmentEntity envForOrder = envRepo.findByIdWithContainersAndConfig(envId)
+                .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + envId));
+            orderedActions = buildService.withContainerStartSteps(buildPipelineOrder(envId),
+                findContainerByRole(envForOrder, "DB") != null,
+                findContainerByRole(envForOrder, "ADM") != null,
+                findContainerByRole(envForOrder, "APP") != null);
         } catch (Exception e) {
             log.error("Failed to build pipeline order for env {}: {}", envId, e.getMessage());
             if (envForLog != null) {
@@ -466,6 +471,9 @@ public class ActionService {
                     // Inline marker: on a re-run, create/start the DB container if needed
                     // and re-check that it is ready, listening, and has a Maximo schema.
                     buildService.ensureDbContainerStarted(envId, stepLogger);
+                    exitCode = 0;
+                } else if ("check-db-schema".equals(action.id())) {
+                    buildService.checkDbSchema(envId, stepLogger);
                     exitCode = 0;
                 } else if ("start-adm".equals(action.id())) {
                     buildService.ensureAdmContainerStarted(envId, stepLogger);

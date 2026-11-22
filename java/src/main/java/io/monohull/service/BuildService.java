@@ -236,6 +236,14 @@ public class BuildService {
                             actionService.markStepCompleted(pipelineRunId, seq);
                         }
                     }
+                    case "check-db-schema" -> {
+                        if (db != null) {
+                            actionService.runInlineStep(pipelineRunId, seq, action.name(), logger,
+                                l -> verifyMaximoSchema(db, env, l));
+                        } else {
+                            actionService.markStepCompleted(pipelineRunId, seq);
+                        }
+                    }
                     case "start-adm" -> {
                         if (!admStarted) {
                             final boolean needDb = !dbStarted && db != null;
@@ -314,44 +322,18 @@ public class BuildService {
         }
     }
 
-    /** Pipeline markers whose work BuildService does inline instead of exec'ing a command. */
-    static final List<String> CONTAINER_START_STEPS = List.of("start-db", "start-adm", "start-app");
-
     /**
-     * Make sure the pipeline starts the DB and ADM containers as steps of its own.
-     *
-     * <p>Saved pipeline definitions (and bundles) written before start-db / start-adm
-     * existed don't list them, so they are put in front of the first step. A pipeline that
-     * does list them keeps its own placement. Markers for a container the environment
-     * doesn't have are dropped, since there is nothing for them to start.
+     * The pipeline as it runs for this environment: the container-start markers added where a
+     * definition doesn't list them, and dropped for containers the environment doesn't have.
+     * See {@link PipelineMarkers}.
      */
     List<ActionService.ResolvedAction> withContainerStartSteps(List<ActionService.ResolvedAction> ordered,
                                                                boolean hasDb, boolean hasAdm, boolean hasApp) {
-        List<ActionService.ResolvedAction> result = new ArrayList<>();
-        for (ActionService.ResolvedAction a : ordered) {
-            if ("start-db".equals(a.id()) && !hasDb) continue;
-            if ("start-adm".equals(a.id()) && !hasAdm) continue;
-            if ("start-app".equals(a.id()) && !hasApp) continue;
-            result.add(a);
-        }
-        boolean listsDb = result.stream().anyMatch(a -> "start-db".equals(a.id()));
-        boolean listsAdm = result.stream().anyMatch(a -> "start-adm".equals(a.id()));
-        int insertAt = 0;
-        if (hasDb && !listsDb) {
-            result.add(insertAt++, markerAction("start-db", "Start Database", "DB"));
-        }
-        if (hasAdm && !listsAdm) {
-            int afterDb = indexOf(result, "start-db");
-            result.add(afterDb >= 0 ? afterDb + 1 : insertAt, markerAction("start-adm", "Start ADM Container", "ADM"));
-        }
-        return result;
-    }
-
-    private static int indexOf(List<ActionService.ResolvedAction> actions, String id) {
-        for (int i = 0; i < actions.size(); i++) {
-            if (id.equals(actions.get(i).id())) return i;
-        }
-        return -1;
+        return PipelineMarkers.withMarkers(ordered, ActionService.ResolvedAction::id, id -> switch (id) {
+            case PipelineMarkers.START_DB -> markerAction(id, "Start Database", "DB");
+            case PipelineMarkers.CHECK_DB_SCHEMA -> markerAction(id, "Check Maximo Schema", "DB");
+            default -> markerAction(id, "Start ADM Container", "ADM");
+        }, hasDb, hasAdm, hasApp);
     }
 
     private ActionService.ResolvedAction markerAction(String id, String fallbackName, String role) {
@@ -361,8 +343,8 @@ public class BuildService {
 
     /**
      * The start-db step: create and start the DB container, wait for it to be ready, and
-     * check it is listening on the configured port and has a Maximo schema. The DB image is
-     * responsible for ensuring the Maximo database exists; we just wait and verify.
+     * check it is listening on the configured port. Whether it holds a Maximo schema is the
+     * separate check-db-schema step, so a pipeline can restore the database in between.
      */
     private void startDbStep(ContainerEntity dbContainer, EnvironmentEntity env,
                              EnvironmentConfigEntity config, String workspaceBindSource,
@@ -375,13 +357,25 @@ public class BuildService {
     private void checkDbReady(ContainerEntity dbContainer, EnvironmentEntity env, Consumer<String> logger) {
         waitForDbReady(dbContainer, logger);
         verifyDbListening(dbContainer, env, logger);
+    }
+
+    /** The check-db-schema step on a pipeline re-run. */
+    public void checkDbSchema(Long environmentId, Consumer<String> logger) {
+        EnvironmentEntity env = envRepo.findByIdWithContainersAndConfig(environmentId)
+            .orElseThrow(() -> new IllegalArgumentException("Environment not found: " + environmentId));
+        ContainerEntity dbContainer = env.getContainers().stream()
+            .filter(c -> c.getRole() == ContainerRole.DB).findFirst().orElse(null);
+        if (dbContainer == null) {
+            logger.accept("[db-verify] No DB container defined for env " + env.getName() + "; nothing to check");
+            return;
+        }
         verifyMaximoSchema(dbContainer, env, logger);
     }
 
     /**
      * Idempotently bring the DB container up, for a pipeline re-run's start-db step:
      * create it if it was never created (or its id is stale), start it if stopped, then
-     * re-run the readiness, port and schema checks either way.
+     * re-run the readiness and port checks either way.
      *
      * <p>A container that already exists keeps the ports it was created with, so after
      * changing DB Container Port on the image config, rebuild the environment rather than
@@ -1175,9 +1169,41 @@ public class BuildService {
         for (String hint : diagnoseEmptyDb(dbContainer)) {
             logger.accept("[hint] " + hint);
         }
+        if (out.toString().contains("SQL1013N")) {
+            String existing = listDb2Databases(dbContainer);
+            throw new RuntimeException("Database '" + dbName + "' does not exist in the DB container"
+                + (existing.isEmpty() ? "" : " (it has: " + existing + ")")
+                + ". Set Database Name on the image config to the database the image creates or "
+                + "restores, or make sure a pipeline step before Check Maximo Schema restores it.");
+        }
         throw new RuntimeException("Database '" + dbName + "' has no Maximo schema (MAXIMO.MAXOBJECT "
             + "is not there). The DB container came up but its database is empty, so every pipeline "
-            + "action that touches Maximo tables would fail. Fix the database before rebuilding.");
+            + "action that touches Maximo tables would fail. Fix the database before rebuilding, or, "
+            + "if a pipeline step restores it, place Check Maximo Schema after that step.");
+    }
+
+    /** Database names in the DB2 instance's directory, comma-separated; empty if unknown. */
+    private String listDb2Databases(ContainerEntity dbContainer) {
+        StringBuilder out = new StringBuilder();
+        try {
+            docker.execInContainer(dbContainer.getDockerContainerId(),
+                "su - db2inst1 -c \"db2 list db directory\" 2>/dev/null", null, 30,
+                line -> out.append(line).append('\n'));
+        } catch (Exception e) {
+            return "";
+        }
+        return parseDb2DatabaseNames(out.toString());
+    }
+
+    static String parseDb2DatabaseNames(String listDbDirectoryOutput) {
+        if (listDbDirectoryOutput == null) return "";
+        return listDbDirectoryOutput.lines()
+            .map(String::trim)
+            .filter(l -> l.matches("(?i)^Database name\\s*=.*"))
+            .map(l -> l.substring(l.indexOf('=') + 1).trim())
+            .filter(n -> !n.isEmpty())
+            .distinct()
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**
@@ -1220,7 +1246,8 @@ public class BuildService {
             hints.add("The DB entrypoint logged an empty \"Chosen option\", so it created an empty "
                 + "database instead of restoring one. Set the DB Command on the image config "
                 + "(or this environment's Configuration tab) to the argument the image expects "
-                + "-- commonly \"restore\" -- and rebuild.");
+                + "-- commonly \"restore\" -- and rebuild. Or, if a pipeline step of your own restores "
+                + "the database, place Check Maximo Schema after that step.");
         }
         if (created && !restored) {
             hints.add("The entrypoint ran its create-database path and never logged a restore.");
