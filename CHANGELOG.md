@@ -6,6 +6,8 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-22
+
 ### Added
 - An "open" button next to the Pipeline dropdown on the environment definition page and
   on a running environment's Configuration tab opens the selected pipeline in a new tab
@@ -183,6 +185,7 @@ First public release.
   plain-English cause+fix messages for the common Docker/registry/in-container
   failure modes.
 
+[1.3.0]: https://github.com/ipqii/monohull/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ipqii/monohull/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ipqii/monohull/releases/tag/v1.2.0
 [1.1.0]: https://github.com/ipqii/monohull/releases/tag/v1.1.0
