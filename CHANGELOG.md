@@ -6,6 +6,17 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Removing an environment no longer gets stuck on a container Monohull has no record of
+  (for example a mock container started by an older version, or one started by hand)
+  that is still attached to the environment's network. Docker refused to delete the
+  network, so the environment could never be removed. Monohull-managed containers left on
+  the network are now removed with it; any other container is only disconnected.
+- Removing an environment only deletes the network with exactly its name. Docker's name
+  filter matches substrings, so removing `acme-1` could also try to delete `acme-10`'s
+  network.
+- An incomplete teardown is now written to the Monohull log as well as shown in the UI.
+
 ## [1.3.0] — 2026-11-22
 
 ### Added

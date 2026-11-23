@@ -1,5 +1,7 @@
 package io.monohull.service;
 
+import com.github.dockerjava.api.model.Network;
+
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.CreateContainerResponse;
@@ -835,9 +837,53 @@ public class DockerService {
 
     /** Remove the named network. Already-gone is fine; real failures propagate so the
      *  teardown sweep can report them instead of silently leaking the network. */
+    /**
+     * Remove an environment's network, clearing anything still attached to it first.
+     *
+     * <p>Docker refuses to remove a network with active endpoints, so a container Monohull
+     * has no record of — one an older version started without recording it, or one started
+     * by hand — would otherwise block the environment's removal for good. Monohull-managed
+     * containers still on the network belong to the environment and are force-removed;
+     * anything else is only disconnected, never deleted.
+     *
+     * <p>Docker's name filter matches substrings, so only the network with exactly this
+     * name is touched: removing {@code acme-1} must not reach {@code acme-10}'s network.
+     */
     public void removeNetwork(String networkName) {
-        docker.listNetworksCmd().withNameFilter(networkName).exec()
-            .forEach(n -> docker.removeNetworkCmd(n.getId()).exec());
+        for (Network n : docker.listNetworksCmd().withNameFilter(networkName).exec()) {
+            if (!networkName.equals(n.getName())) continue;
+            Network full = docker.inspectNetworkCmd().withNetworkId(n.getId()).exec();
+            Map<String, Network.ContainerNetworkConfig> attached = full != null ? full.getContainers() : null;
+            if (attached != null) {
+                for (String containerId : attached.keySet()) {
+                    detachFromNetwork(containerId, n.getId(), networkName);
+                }
+            }
+            docker.removeNetworkCmd(n.getId()).exec();
+        }
+    }
+
+    private void detachFromNetwork(String containerId, String networkId, String networkName) {
+        InspectContainerResponse c;
+        try {
+            c = docker.inspectContainerCmd(containerId).exec();
+        } catch (NotFoundException gone) {
+            return;
+        }
+        String name = c.getName() != null ? c.getName().replaceFirst("^/", "") : containerId;
+        Map<String, String> labels = c.getConfig() != null ? c.getConfig().getLabels() : null;
+        try {
+            if (labels != null && "true".equals(labels.get(MANAGED_LABEL))) {
+                log.info("Removing managed container {} still attached to network {}", name, networkName);
+                docker.removeContainerCmd(containerId).withForce(true).exec();
+            } else {
+                log.info("Disconnecting unmanaged container {} from network {}", name, networkName);
+                docker.disconnectFromNetworkCmd().withNetworkId(networkId).withContainerId(containerId)
+                    .withForce(true).exec();
+            }
+        } catch (NotFoundException gone) {
+            // removed meanwhile — nothing left attached
+        }
     }
 
     /** Remove the named volume. Already-gone is fine; real failures (in use, daemon
