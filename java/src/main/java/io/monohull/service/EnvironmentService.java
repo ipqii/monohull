@@ -350,6 +350,9 @@ public class EnvironmentService {
         }
 
         if (!failures.isEmpty()) {
+            // The message goes back to the browser; log it too, so it can be found in the
+            // container log after the fact.
+            log.warn("Teardown of environment {} incomplete: {}", env.getName(), String.join("; ", failures));
             throw new IllegalStateException("Removed what it could, but teardown is incomplete — "
                 + String.join("; ", failures)
                 + ". Is the Docker daemon reachable? Fix the cause and remove the environment again: "
