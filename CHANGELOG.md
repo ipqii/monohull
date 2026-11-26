@@ -6,6 +6,16 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+- Dependencies updated against published advisories: Spring Boot 3.3.4 → 3.5.16
+  (Spring Framework 6.2, Spring Security 6.5, Hibernate 6.6, Flyway 11), embedded
+  Tomcat 10.1.61, docker-java 3.7.1, and patch-level pins for Jackson, the MariaDB
+  driver, Bouncy Castle, Guava, commons-lang3 and the Log4j API.
+- The unused Jersey and Netty Docker transports are no longer packaged (the app only
+  ever used the Apache HttpClient 5 transport), which removes Netty, Jersey and
+  HttpClient 4 from the jar.
+- Frontend lockfile refreshed with the non-breaking `npm audit fix` updates.
+
 ### Fixed
 - Monohull signed people out after 30 minutes without activity: no session timeout was
   set, so Spring Boot's default applied, and a page left open makes no requests. Sessions

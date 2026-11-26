@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Monohull is a Spring Boot application with a React web UI that orchestrates Docker containers for IBM Maximo® development environments. It manages three containers per environment: a database (DB2 or Oracle), a WebSphere application server, and an administration tool container.
 
-- **Java 17**, **Spring Boot 3.3.4**, **Maven**
+- **Java 17**, **Spring Boot 3.5.16**, **Maven**
 - **Spring MVC** (spring-boot-starter-web) with **reactor-core** for SSE log streaming
 - **JPA + MariaDB + Flyway** for persistence
 - **React + TypeScript + Vite + MUI** frontend
