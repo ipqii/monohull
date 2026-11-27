@@ -17,14 +17,25 @@
 
 	<properties>
 		<java.version>17</java.version>
-		<spring-boot.version>3.3.4</spring-boot.version>
-		<docker-java.version>3.3.6</docker-java.version>
+		<spring-boot.version>3.5.16</spring-boot.version>
+		<docker-java.version>3.7.1</docker-java.version>
 		<node.version>v20.11.0</node.version>
 		<npm.version>10.2.4</npm.version>
 	</properties>
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- Security overrides (MH-42): patch releases newer than the ones Spring Boot
+			     ${spring-boot.version} and docker-java ${docker-java.version} manage, each
+			     fixing published advisories. Drop an entry once the BOM catches up.
+			     The Jackson BOM is imported before Spring Boot's so that it wins. -->
+			<dependency>
+				<groupId>com.fasterxml.jackson</groupId>
+				<artifactId>jackson-bom</artifactId>
+				<version>2.21.7</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-dependencies</artifactId>
@@ -32,23 +43,64 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<dependency>
+				<groupId>org.mariadb.jdbc</groupId>
+				<artifactId>mariadb-java-client</artifactId>
+				<version>3.5.11</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-api</artifactId>
+				<version>2.25.5</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.logging.log4j</groupId>
+				<artifactId>log4j-to-slf4j</artifactId>
+				<version>2.25.5</version>
+			</dependency>
+			<!-- Transitive through docker-java-core. -->
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcpkix-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcutil-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
+			<dependency>
+				<groupId>com.google.guava</groupId>
+				<artifactId>guava</artifactId>
+				<version>33.7.2-jre</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-lang3</artifactId>
+				<version>3.20.0</version>
+			</dependency>
 			<!-- Explicit Tomcat override: <tomcat.version> property only works with
 			     the Spring Boot parent POM, not with BOM import. Explicit entries
 			     here take precedence over the BOM regardless of parent POM usage. -->
 			<dependency>
 				<groupId>org.apache.tomcat.embed</groupId>
 				<artifactId>tomcat-embed-core</artifactId>
-				<version>10.1.54</version>
+				<version>10.1.61</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.tomcat.embed</groupId>
 				<artifactId>tomcat-embed-el</artifactId>
-				<version>10.1.54</version>
+				<version>10.1.61</version>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.tomcat.embed</groupId>
 				<artifactId>tomcat-embed-websocket</artifactId>
-				<version>10.1.54</version>
+				<version>10.1.61</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -107,10 +159,13 @@
 			<artifactId>flyway-mysql</artifactId>
 		</dependency>
 
-		<!-- Docker Engine API client -->
+		<!-- Docker Engine API client. docker-java-core rather than the docker-java
+		     umbrella artifact: the umbrella also pulls the Jersey and Netty transports,
+		     which are never used (DockerConfig builds the httpclient5 transport) and
+		     carry most of the known vulnerabilities in the dependency tree. -->
 		<dependency>
 			<groupId>com.github.docker-java</groupId>
-			<artifactId>docker-java</artifactId>
+			<artifactId>docker-java-core</artifactId>
 			<version>${docker-java.version}</version>
 		</dependency>
 
