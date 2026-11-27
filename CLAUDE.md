@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Where changes go
+
+Monohull is open source. Its only home is the GitHub repository
+**https://github.com/ipqii/monohull**, and every change lands there as a pull request
+against **`main`**.
+
+- Do not push branches or open pull requests anywhere else. The internal Forgejo copy
+  (`ipqii/pq-monohull` on git.ipqii.dev, branch `develop`) is archived and out of date.
+  A ticket from the internal tracker (e.g. `MH-41`) still gets its pull request here,
+  with the ticket key in the branch name and title.
+- Working from a fork is fine; the pull request still targets `ipqii/monohull` `main`.
+
 ## Project Overview
 
 Monohull is a Spring Boot application with a React web UI that orchestrates Docker containers for IBM Maximo® development environments. It manages three containers per environment: a database (DB2 or Oracle), a WebSphere application server, and an administration tool container.
