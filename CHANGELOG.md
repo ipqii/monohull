@@ -6,6 +6,8 @@ All notable changes to Monohull are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-27
+
 ### Security
 - Dependencies updated against published advisories: Spring Boot 3.3.4 → 3.5.16
   (Spring Framework 6.2, Spring Security 6.5, Hibernate 6.6, Flyway 11), embedded
@@ -214,6 +216,7 @@ First public release.
   plain-English cause+fix messages for the common Docker/registry/in-container
   failure modes.
 
+[1.4.0]: https://github.com/ipqii/monohull/releases/tag/v1.4.0
 [1.3.0]: https://github.com/ipqii/monohull/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ipqii/monohull/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ipqii/monohull/releases/tag/v1.2.0
