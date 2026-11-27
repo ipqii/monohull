@@ -7,6 +7,11 @@ All notable changes to Monohull are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Copy buttons (environment URL, JDBC URL, database password, container name, image,
+  registry tag, webhook URL and secret) did nothing when Monohull was opened over plain
+  HTTP on anything but `localhost`: browsers expose the clipboard API only in secure
+  contexts. Every copy now falls back to the legacy copy command there, and the
+  environment URL and password buttons confirm with "Copied" like the others.
 - Removing an environment no longer gets stuck on a container Monohull has no record of
   (for example a mock container started by an older version, or one started by hand)
   that is still attached to the environment's network. Docker refused to delete the

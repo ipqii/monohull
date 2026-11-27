@@ -9,6 +9,7 @@ import RefreshIcon from '@mui/icons-material/RefreshRounded'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMoreRounded'
 import CopyIcon from '@mui/icons-material/ContentCopyRounded'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { copyText } from '../utils/clipboard'
 import {
   getRegistryCredential, saveRegistryCredential, deleteRegistryCredential,
   getRegistryCatalog, getRegistryTags,
@@ -289,13 +290,11 @@ function RepositoryRow({ repository, registry, divider }: { repository: string; 
 
   const copyRef = (tag: string) => {
     const ref = `${registry}/${repository}:${tag}`
-    navigator.clipboard?.writeText(ref).then(
-      () => {
-        setCopied(tag)
-        setTimeout(() => setCopied(null), 1500)
-      },
-      () => undefined,
-    )
+    void copyText(ref).then(ok => {
+      if (!ok) return
+      setCopied(tag)
+      setTimeout(() => setCopied(null), 1500)
+    })
   }
 
   return (

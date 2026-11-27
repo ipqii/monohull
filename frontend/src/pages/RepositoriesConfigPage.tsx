@@ -20,6 +20,7 @@ import {
 } from '../api/client'
 import PrBuildsDialog from '../components/PrBuildsDialog'
 import ConfirmDialog from '../components/ConfirmDialog'
+import { copyText } from '../utils/clipboard'
 
 const PROVIDERS: { value: RepoProvider; label: string }[] = [
   { value: 'GITHUB', label: 'GitHub' },
@@ -67,7 +68,7 @@ function CopyButton({ value }: { value: string }) {
     <Tooltip title={copied ? 'Copied' : 'Copy'} placement="top">
       <IconButton
         size="small"
-        onClick={() => { navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1200) }) }}
+        onClick={() => { void copyText(value).then(ok => { if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1200) } }) }}
         sx={{ color: copied ? '#22c55e' : '#64748b', p: 0.25 }}
       >
         <ContentCopyIcon sx={{ fontSize: '0.9rem' }} />

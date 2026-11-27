@@ -6,16 +6,7 @@ import PauseIcon from '@mui/icons-material/Pause'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 
-function fallbackCopy(text: string) {
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-  document.execCommand('copy')
-  document.body.removeChild(textarea)
-}
+import { copyText } from '../utils/clipboard'
 
 interface Props {
   lines: string[]
@@ -141,20 +132,11 @@ export default function LogViewer({ lines, filename, downloadUrl }: Props) {
   const getLogText = useCallback(() => visualLines.join('\n'), [visualLines])
 
   const handleCopy = useCallback(() => {
-    const text = getLogText()
-    const done = () => {
+    void copyText(getLogText()).then(ok => {
+      if (!ok) return
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    }
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(text).then(done).catch(() => {
-        fallbackCopy(text)
-        done()
-      })
-    } else {
-      fallbackCopy(text)
-      done()
-    }
+    })
   }, [getLogText])
 
   const handleDownload = useCallback(() => {

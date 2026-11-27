@@ -40,6 +40,7 @@ import ActionDefinitionLink from '../components/ActionDefinitionLink'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { ExtraBind, ExtraEnvVar } from '../api/client'
 import { useLogStream } from '../hooks/useLogStream'
+import { copyText } from '../utils/clipboard'
 
 function ExecutionRow({ exec, expanded, onToggle }: {
   exec: ActionExecution
@@ -125,16 +126,25 @@ function ExecutionRow({ exec, expanded, onToggle }: {
   )
 }
 
-function CopyChipValue({ value, mono = true }: { value: string; mono?: boolean }) {
+function CopyIconButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
   const handleCopy = async (e: MouseEvent) => {
     e.stopPropagation()
-    try {
-      await navigator.clipboard.writeText(value)
+    if (await copyText(value)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
-    } catch { /* ignore */ }
+    }
   }
+  return (
+    <Tooltip title={copied ? 'Copied' : 'Copy'} placement="top">
+      <IconButton size="small" onClick={handleCopy} sx={{ color: copied ? '#22c55e' : '#64748b', p: 0.25 }}>
+        <ContentCopyIcon sx={{ fontSize: '0.9rem' }} />
+      </IconButton>
+    </Tooltip>
+  )
+}
+
+function CopyChipValue({ value, mono = true }: { value: string; mono?: boolean }) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
       <Typography
@@ -152,11 +162,7 @@ function CopyChipValue({ value, mono = true }: { value: string; mono?: boolean }
       >
         {value}
       </Typography>
-      <Tooltip title={copied ? 'Copied' : 'Copy'} placement="top">
-        <IconButton size="small" onClick={handleCopy} sx={{ color: copied ? '#22c55e' : '#64748b', p: 0.25 }}>
-          <ContentCopyIcon sx={{ fontSize: '0.9rem' }} />
-        </IconButton>
-      </Tooltip>
+      <CopyIconButton value={value} />
     </Box>
   )
 }
@@ -264,11 +270,7 @@ function AccessCard({
                     >
                       {primaryUrl}
                     </Link>
-                    <Tooltip title="Copy" placement="top">
-                      <IconButton size="small" onClick={() => navigator.clipboard.writeText(primaryUrl)} sx={{ color: '#64748b', p: 0.25 }}>
-                        <ContentCopyIcon sx={{ fontSize: '0.9rem' }} />
-                      </IconButton>
-                    </Tooltip>
+                    <CopyIconButton value={primaryUrl} />
                   </Box>
                 </AccessRow>
               )}
@@ -334,11 +336,7 @@ function AccessCard({
                       {showPassword ? <VisibilityOffIcon sx={{ fontSize: '0.95rem' }} /> : <VisibilityIcon sx={{ fontSize: '0.95rem' }} />}
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Copy" placement="top">
-                    <IconButton size="small" onClick={() => navigator.clipboard.writeText(password)} sx={{ color: '#64748b', p: 0.25 }}>
-                      <ContentCopyIcon sx={{ fontSize: '0.9rem' }} />
-                    </IconButton>
-                  </Tooltip>
+                  <CopyIconButton value={password} />
                 </Box>
               </AccessRow>
             </Stack>
@@ -882,7 +880,7 @@ export default function EnvironmentDetailPage() {
                       <Tooltip title="Copy container name" placement="top">
                         <IconButton
                           size="small"
-                          onClick={() => navigator.clipboard.writeText(c.containerName)}
+                          onClick={() => { void copyText(c.containerName) }}
                           sx={{ color: '#64748b', p: 0.25, '&:hover': { color: '#22d3ee' } }}
                         >
                           <ContentCopyIcon sx={{ fontSize: '0.85rem' }} />
@@ -909,7 +907,7 @@ export default function EnvironmentDetailPage() {
                       <Tooltip title="Copy image" placement="top">
                         <IconButton
                           size="small"
-                          onClick={() => navigator.clipboard.writeText(c.image)}
+                          onClick={() => { void copyText(c.image) }}
                           sx={{ color: '#64748b', p: 0.25, '&:hover': { color: '#22d3ee' } }}
                         >
                           <ContentCopyIcon sx={{ fontSize: '0.85rem' }} />
