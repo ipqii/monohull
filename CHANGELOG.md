@@ -7,6 +7,9 @@ All notable changes to Monohull are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Monohull signed people out after 30 minutes without activity: no session timeout was
+  set, so Spring Boot's default applied, and a page left open makes no requests. Sessions
+  now last 8 hours idle, configurable with `MONOHULL_SESSION_TIMEOUT`.
 - Copy buttons (environment URL, JDBC URL, database password, container name, image,
   registry tag, webhook URL and secret) did nothing when Monohull was opened over plain
   HTTP on anything but `localhost`: browsers expose the clipboard API only in secure
