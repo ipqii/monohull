@@ -2,6 +2,11 @@ server:
   port: 8080
   servlet:
     session:
+      # How long a signed-in session survives without a request. Spring Boot's default
+      # of 30 minutes signs people out of a tab left open over a meeting or lunch, since
+      # an idle page makes no API calls. Override via MONOHULL_SESSION_TIMEOUT
+      # (e.g. "30m", "12h"; a bare number is seconds).
+      timeout: ${MONOHULL_SESSION_TIMEOUT:8h}
       cookie:
         # Distinct from Maximo's JSESSIONID so a login to a managed env on another port of
         # the same host cannot overwrite Monohull's own session (cookies scope by host, not
